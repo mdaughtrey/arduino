@@ -14,17 +14,18 @@ MOUNT=/media/rp2040
 DOCKERHOST=pop-os
 DOCKERNAME=acli
 DOCKER=docker
+RBDIR=~/remotebuild/arduino/${PROJ}
 
 all:
 	make b
 #ssh mattd@${DOCKERHOST}  ${DOCKER} run --rm -v ~/dev/personal-projects:/personal-projects 
 # Build remote
 br:
-	git commit . -m dev
-	ssh mattd@${DOCKERHOST}  ${DOCKER} run --rm -v ~/personal-projects:/personal-projects  \
+	rsync -r --mkpath . mattd@${DOCKERHOST}:${RBDIR}
+	ssh mattd@${DOCKERHOST}  ${DOCKER} run --rm -v ${RBDIR}:/${PROJ}  \
 	--entrypoint /home/mattd/acli/bin/arduino-cli \
-		--name ${DOCKERNAME} ${DOCKERNAME}:latest compile --clean ${PROJDIR}/${PROJ}.ino -b ${PLATFORM} --output-dir  ${PROJDIR}
-	scp mattd@${DOCKERHOST} ~/personal-projects/arduino/projv4/projv4.ino.* .
+		--name ${DOCKERNAME} ${DOCKERNAME}:latest compile /${PROJ}/${PROJ}.ino -b ${PLATFORM} --output-dir /${PROJ}
+	rsync mattd@${DOCKERHOST}:${RBDIR}/${PROJ}.ino.bin :${RBDIR}/${PROJ}.ino.elf :${RBDIR}/${PROJ}.ino.map :${RBDIR}/${PROJ}.ino.uf2 .
 #	ssh mattd@pop-os  ${DOCKER} run --rm -v ~/personal-projects:/personal-projects \
 #        --entrypoint /home/mattd/acli/bin/arduino-cli \
 #		--name ${DOCKERNAME} ${DOCKERNAME}:latest compile --clean ${PROJDIR}/${PROJ}.ino -b ${PLATFORM} --output-dir  ${PROJDIR}

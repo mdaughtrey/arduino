@@ -516,7 +516,7 @@ const char help_autotension[] PROGMEM="Autotension";
 const char help_stepperrun[] PROGMEM = "run (param as steps)";
 const char help_tensionTO[] PROGMEM = "set tension timeout (param)";
 const char help_forward[] PROGMEM = "Forward";
-const char help_stop[] PROGMEM = "Stop".
+const char help_stop[] PROGMEM = "Stop";
 
 Command commands_main[] = {
 {'?',FSH(help_dumpconfig), [](){ dumpConfig(0);}},
@@ -536,7 +536,7 @@ Command commands_main[] = {
 //    config.slowEncoderThreshold = config.param;
 //    config.param = 0; }},
 #endif // OPTO_ENCODER
-{'f',FSH(help_forward), [](){ config.HUNTSTATE = HUNT_FORWARD; }},
+{'f',FSH(help_forward), [](){ config.huntState = HUNT_FORWARD; }},
 {'h',FSH(help_help), [](){ help();}},
 {'i',FSH(help_init), [](){ initialize(); }},
 {' ',FSH(help_reset), [](){ setup();}},
@@ -553,7 +553,7 @@ Command commands_main[] = {
 }},
 {'s',FSH(help_stop), [](){
     stepper.stop();
-    config.huntstate = HUNT_NONE:
+    config.huntState = HUNT_NONE;
 }},
 
 //{'r',FSH(help_isr), [](){ do_isr();}},
@@ -577,7 +577,7 @@ const char help_imin[] PROGMEM = "set min interval (param)";
 const char help_rup[] PROGMEM = "set ramp up steps (param)";
 const char help_rdown[] PROGMEM = "set ramp down steps (param)";
 const char help_sconfig[] PROGMEM = "dump stepper config";
-const char help_stop[] PROGMEM = "<space> stop";
+//const char help_stop[] PROGMEM = "<space> stop";
 const char help_start[] PROGMEM = "start";
 const char help_sdisable[] PROGMEM = "disable stepper outputs";
 const char help_senable[] PROGMEM = "enable stepper outputs";
