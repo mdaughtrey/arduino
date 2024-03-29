@@ -536,7 +536,11 @@ Command commands_main[] = {
 //    config.slowEncoderThreshold = config.param;
 //    config.param = 0; }},
 #endif // OPTO_ENCODER
-{'f',FSH(help_forward), [](){ config.huntState = HUNT_FORWARD; }},
+{'f',FSH(help_forward), [](){ 
+    stepper.enabled();
+    stepper.start();
+    config.huntState = HUNT_FORWARD; 
+}},
 {'h',FSH(help_help), [](){ help();}},
 {'i',FSH(help_init), [](){ initialize(); }},
 {' ',FSH(help_reset), [](){ setup();}},
@@ -674,7 +678,11 @@ void handleCommand(uint8_t command)
 void stepperPoll()
 {
     if (HUNT_NONE == config.huntState) return;
-    if (HUNT_FORWARD == config.huntState) stepper.run();
+    if (HUNT_FORWARD == config.huntState)
+    {
+        stepper.run();
+        return;
+    }
     if ((millis() - config.encoderTime) > config.encoderTO)
     {
         stepper.stop();
