@@ -253,6 +253,7 @@ void setup ()
     stepper.m_rampDownSteps = 10;
     config.filmState = FILM_NONE;
 
+    stepper.stop();
     stepper.cw(); 
     buttonInit();
 #ifdef OPTO_ENCODER
