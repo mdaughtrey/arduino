@@ -93,6 +93,7 @@ typedef struct
 //    int32_t numericParam;
 //    bool accumParameter;
 //}config;
+int32_t numericParameter;
 #ifdef FINGER
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
 #endif // FINGER
@@ -103,6 +104,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 //Keyboard kb();
 Command * command_set;
 extern Command commands_main[];
+extern Command commands_fingerprint[];
 
 //jFontSel fonts[] = {
 //j    { F("Sans9pt7b"), &FreeSans9pt7b },
@@ -126,7 +128,12 @@ void key_store_init(Preferences ks);
 void cmd_serial2_test_string(void);
 void setup(void);
 #ifdef FINGER
+void fingerprint_error(int8_t);
 void cmd_fingerprint_init();
+void cmd_fingerprint_menu(void);
+void cmd_fingerprint_ledtest(void);
+void cmd_fingerprint_delete(int32_t);
+void cmd_fingerprint_enroll();
 #endif // FINGER
 void loop(void);
 
@@ -173,18 +180,18 @@ void redisplay()
 //
 void cmd_show_config(void)
 {
-    Serial.printf("RX2 %d\r\n", RX2);
-    Serial.printf("TX2 %d\r\n", TX2);
+    Serial.printf(F("parameter %d\r\n"), numericParameter);
 #ifdef FINGER
-      Serial.println(F("Reading sensor parameters"));
-      finger.getParameters();
-      Serial.printf(F("Status: 0x%02x "), finger.status_reg);
-      Serial.printf(F("Sys ID: 0x%02x "), finger.system_id);
-      Serial.printf(F("Capacity: %u "), finger.capacity);
-      Serial.printf(F("Security level: %d "), finger.security_level);
-      Serial.printf(F("Device address: 0x%02x "), finger.device_addr);
-      Serial.printf(F("Packet len: %u "), finger.packet_len);
-      Serial.printf(F("Baud rate: %u\r\n"), finger.baud_rate);
+    Serial.println(F("Reading sensor parameters"));
+    finger.getParameters();
+    Serial.printf(F("Status: 0x%02x "), finger.status_reg);
+    Serial.printf(F("Sys ID: 0x%02x "), finger.system_id);
+    Serial.printf(F("Capacity: %u "), finger.capacity);
+    Serial.printf(F("Security level: %d "), finger.security_level);
+    Serial.printf(F("Device address: 0x%02x "), finger.device_addr);
+    Serial.printf(F("Packet len: %u "), finger.packet_len);
+    Serial.printf(F("Baud rate: %u\r\n"), finger.baud_rate);
+    Serial.printf(F("Template Count %d\r\n"), finger.getTemplateCount());
 #endif // FINGER
 //    Preferences key_store;
 //    key_store.begin(KEYSTORE_NAME, KEYSTORE_RO);
@@ -312,10 +319,10 @@ void cmd_serial2_test_string(void)
 
 Command commands_main[] = {
 {'?',F("Show Configuration"), [](){ cmd_show_config();}},
-//{'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter();}},
+{'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter();}},
 {'C',F("Clear Keystore"), [](){ cmd_clear_keystore();}},
 #ifdef FINGER
-{'F',F("Fingerprint Init"), [](){ cmd_fingerprint_init(); }},
+{'f',F("Fingerprint Menu"), [](){ cmd_fingerprint_menu(); }},
 #endif // FINGER
 //{'f',F("Font Select"), [](){ cmd_face_select();}},
 {'h',F("Help"), [](){ cmd_help();}},
@@ -329,46 +336,64 @@ Command commands_main[] = {
 {'&',F("Reset"), [](){ cmd_reset(); }}
 };
 
-void handleCommand(uint8_t command)
-{
-//    if (config.accumParameter == true)
-//    {
-//        accumulate_parameter(command);
-//        return;
-//    }
-    for (Command * iter = command_set; iter->key != '&'; iter++)
-    {
-        if (iter->key == command)
-        {
-            iter->fun();
-            return;
-        }
-    }
-    if (command >= '0' & command <= '9')
-    {
-//        config.numericParam *= 10;
-//        config.numericParam += command - '0';
-    }
-}
-
-void key_store_init(Preferences ks)
-{
-    Serial.println(F("key_store_init"));
-    ks.begin(KEYSTORE_NAME, KEYSTORE_RW);
-    ks.putBool("init", true);
-
-    for (uint8_t ii = 0; ii < NUM_KEYS; ii++)
-    {
-        char buffer[20];
-        sprintf(buffer, "disp%02xlabel", ii);
-        ks.putString(buffer, buffer);
-        sprintf(buffer, "disp%02xmacro", ii);
-        ks.putString(buffer, buffer);
-    }
-    Serial.println(F("key_store_init done"));
-}
-
 #ifdef FINGER
+
+void fingerprint_error(int8_t id)
+{
+    switch(id)
+    {
+    case FINGERPRINT_OK:
+        Serial.println(F("FINGERPRINT_OK")); break;
+    case FINGERPRINT_PACKETRECIEVEERR:
+        Serial.println(F("FINGERPRINT_PACKETRECIEVEERR")); break;
+    case FINGERPRINT_NOFINGER:
+        Serial.println(F("FINGERPRINT_NOFINGER")); break;
+    case FINGERPRINT_IMAGEFAIL:
+        Serial.println(F("FINGERPRINT_IMAGEFAIL")); break;
+    case FINGERPRINT_IMAGEMESS:
+        Serial.println(F("FINGERPRINT_IMAGEMESS")); break;
+    case FINGERPRINT_FEATUREFAI:
+        Serial.println(F("FINGERPRINT_FEATUREFAI")); break;
+    case FINGERPRINT_NOMATCH:
+        Serial.println(F("FINGERPRINT_NOMATCH")); break;
+    case FINGERPRINT_NOTFOUND:
+        Serial.println(F("FINGERPRINT_NOTFOUND")); break;
+    case FINGERPRINT_ENROLLMISMATCH:
+        Serial.println(F("FINGERPRINT_ENROLLMISMATCH")); break;
+    case FINGERPRINT_BADLOCATION:
+        Serial.println(F("FINGERPRINT_BADLOCATION")); break;
+    case FINGERPRINT_DBRANGEFAIL:
+        Serial.println(F("FINGERPRINT_DBRANGEFAIL")); break;
+    case FINGERPRINT_UPLOADFEATUREFAIL:
+        Serial.println(F("FINGERPRINT_UPLOADFEATUREFAIL")); break;
+    case FINGERPRINT_PACKETRESPONSEFAIL:
+        Serial.println(F("FINGERPRINT_PACKETRESPONSEFAIL")); break;
+    case FINGERPRINT_UPLOADFAIL:
+        Serial.println(F("FINGERPRINT_UPLOADFAIL")); break;
+    case FINGERPRINT_DELETEFAIL:
+        Serial.println(F("FINGERPRINT_DELETEFAIL")); break;
+    case FINGERPRINT_DBCLEARFAIL:
+        Serial.println(F("FINGERPRINT_DBCLEARFAIL")); break;
+    case FINGERPRINT_PASSFAIL:
+        Serial.println(F("FINGERPRINT_PASSFAIL")); break;
+    case FINGERPRINT_INVALIDIMAGE                                               \:
+        Serial.println(F("FINGERPRINT_INVALIDIMAGE                                               \")); break;
+    case FINGERPRINT_FLASHER:
+        Serial.println(F("FINGERPRINT_FLASHER")); break;
+    case FINGERPRINT_INVALIDREG:
+        Serial.println(F("FINGERPRINT_INVALIDREG")); break;
+    case FINGERPRINT_ADDRCODE:
+        Serial.println(F("FINGERPRINT_ADDRCODE")); break;
+    default:
+        Serial.printf(F("Unknown error %d\r\n"), id); break;
+    }
+}
+
+void cmd_fingerprint_menu(void)
+{
+    command_set = commands_fingerprint;
+}
+
 void cmd_fingerprint_init()
 {
   // set the data rate for the sensor serial port
@@ -398,7 +423,165 @@ void cmd_fingerprint_init()
   Serial.print(F("Packet len: ")); Serial.println(finger.packet_len);
   Serial.print(F("Baud rate: ")); Serial.println(finger.baud_rate);
 }
+
+void cmd_fingerprint_ledtest(void)
+{
+    Serial.println(F("cmd_fingerprint_ledtest begins"));
+    finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_RED);
+    delay(250);
+    finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_BLUE);
+    delay(250);
+    finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_PURPLE);
+    delay(250);
+
+    // flash red LED
+    finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 10);
+    delay(2000);
+    // Breathe blue LED till we say to stop
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_BLUE);
+    delay(3000);
+    finger.LEDcontrol(FINGERPRINT_LED_GRADUAL_ON, 200, FINGERPRINT_LED_PURPLE);
+    delay(2000);
+    finger.LEDcontrol(FINGERPRINT_LED_GRADUAL_OFF, 200, FINGERPRINT_LED_PURPLE);
+    delay(2000);
+    Serial.println(F("cmd_fingerprint_ledtest ends"));
+}
+
+void cmd_fingerprint_delete(int32_t id)
+{
+    Serial.printf(F("Deleting %d\r\n"), id);
+    uint8_t p = finger.deleteModel(id);
+    fingerprint_error(p);
+}
+
+void cmd_fingerprint_clear()
+{
+    finger.emptyDatabase();
+}
+
+void cmd_fingerprint_enroll(int32_t id)
+{
+    int p = -1;
+    Serial.printf(F("Waiting for valid finger to enroll as #%u\r\n"), id);
+    while (p != FINGERPRINT_OK) {
+        p = finger.getImage();
+        fingerprint_error(p);
+    }
+
+    // OK success!
+
+    p = finger.image2Tz(1);
+    fingerprint_error(p);
+    if (FINGERPRINT_OK != p)
+    {
+        return;
+    }
+
+    Serial.println(F("Remove finger"));
+    delay(2000);
+    p = 0;
+    while (p != FINGERPRINT_NOFINGER) 
+    {
+        p = finger.getImage();
+    }
+    Serial.printf(F("ID %u\r\n"), id);
+    p = -1;
+    Serial.println("Place same finger again");
+    while (p != FINGERPRINT_OK) 
+    {
+        p = finger.getImage();
+        fingerprint_error(p);
+    }
+
+    p = finger.image2Tz(2);
+    fingerprint_error(p);
+    // OK converted!
+    Serial.printf(F("Creating model for id %d\r\n"), id);
+
+    p = finger.createModel();
+    fingerprint_error(p);
+
+    p = finger.storeModel(id);
+    fingerprint_error(p);
+    if (FINGERPRINT_OK != p)
+    {
+        return;
+    }
+}
+
+void cmd_fingerprint_get_id()
+{
+    uint8_t p = finger.getImage();
+    fingerprint_error(p);
+    // OK success!
+
+    p = finger.image2Tz();
+    fingerprint_error(p);
+    if (FINGERPRINT_OK != p)
+    {
+        return;
+    }
+
+    // OK converted!
+    p = finger.fingerSearch();
+    fingerprint_error(p);
+    // found a match!
+    Serial.printf(F("Found ID %d with confidence %d\r\n"), finger.fingerID, finger.confidence);
+}
+
+Command commands_fingerprint[] = {
+{'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter(); }},
+{'C',F("Clear Fingerprint DB"), [](){ cmd_fingerprint_clear(); }},
+{'e',F("Enroll new fingerprint to id (parameter)"), [](){ cmd_fingerprint_enroll(numericParameter); }},
+{'h',F("Help"), [](){ cmd_help(); }},
+{'i',F("Init"), []() { cmd_fingerprint_init(); }},
+{'l',F("LED Test"), []() { cmd_fingerprint_ledtest(); }},
+{'r',F("Read Fingerprint"), []() { cmd_fingerprint_get_id(); }},
+{'x',F("Return to main menu"), []() { command_set = commands_main; }},
+{'&',F("Reset"), [](){ cmd_reset(); }}
+};
+
 #endif // FINGER
+
+void handleCommand(uint8_t command)
+{
+//    if (config.accumParameter == true)
+//    {
+//        accumulate_parameter(command);
+//        return;
+//    }
+    for (Command * iter = command_set; iter->key != '&'; iter++)
+    {
+        if (iter->key == command)
+        {
+            iter->fun();
+            return;
+        }
+    }
+    if (command >= '0' & command <= '9')
+    {
+        numericParameter *= 10;
+        numericParameter += command - '0';
+    }
+}
+
+void key_store_init(Preferences ks)
+{
+    Serial.println(F("key_store_init"));
+    ks.begin(KEYSTORE_NAME, KEYSTORE_RW);
+    ks.putBool("init", true);
+
+    for (uint8_t ii = 0; ii < NUM_KEYS; ii++)
+    {
+        char buffer[20];
+        sprintf(buffer, "disp%02xlabel", ii);
+        ks.putString(buffer, buffer);
+        sprintf(buffer, "disp%02xmacro", ii);
+        ks.putString(buffer, buffer);
+    }
+    Serial.println(F("key_store_init done"));
+}
+
 
 void setup(void)
 {
