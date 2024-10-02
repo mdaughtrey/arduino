@@ -1,50 +1,24 @@
-// esp32io.com
-// https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/jtag-debugging/index.html
-// ~/.arduino15/packages/esp32/tools/openocd-esp32/v0.12.0-esp32-20240318/share/openocd/scripts
-// ~/.arduino15/packages/esp32/tools/openocd-esp32/v0.12.0-esp32-20240318/share/openocd/scripts/interface/raspberrypi-native.cfg
-// ~/.arduino15/packages/esp32/tools/openocd-esp32/v0.12.0-esp32-20240318/share/openocd/scripts/interface/raspberrypi-gpio-connector.c
-// https://cdn-learn.adafruit.com/downloads/pdf/adafruit-optical-fingerprint-sensor.pdf
-
-// ESP32 Pin  | JTAG Signal | RPI5 GPIO | RPI5 PIN |
-// MTDO/GPIO15 TDO          | 9         | 21       |
-// MTDI/GPIO12 TDI          | 10        | 19       |
-// MTCK/GPIO13 TCK          | 11        | 23       |
-// MTMS/GPIO14 TMS          | 8         | 24       |
-
-// Fingerprint Reader   | ESP32 Pin
-// Red V+               | 19
-// Yellow Tx            | 27
-// White Rx             | 28
-// Black Ground         | 38
-// Blue TCH -- not used
-// Green UA -- not used
-
-//#define DISPLAY
-#undef DISPLAY
-//#undef FINGER
-#define FINGER
-
-// #define RX2 27  // 16
-// #define TX2 28  // 17
-
-#include <Arduino.h>
+#include <stdint.h>
 #include <Wire.h>
-#ifdef DISPLAY
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#endif // DISPLAY
+#include "muxmux.h"
+//#include <oled.h>
 #include <Preferences.h>
 //#include <Keyboard.h>
-#include <ArduinoYaml.h>
+//#include <ArduinoYaml.h>
 #ifdef FINGER
 #include <Adafruit_Fingerprint.h>
 #endif // FINGER
 
-//#include <Fonts/FreeSans9pt7b.h>
-#ifdef DISPLAY
+//#define DFORMAT_SPIFFS_IF_FAILED true
+// #ifdef DFORMAT_SPIFFS_IF_FAILED
+// #error BORK
+// #endif 
+#ifdef OLED_DISPLAY
 #include <Fonts/FreeSans12pt7b.h>
-#endif // DISPLAY
+#include "oled.h"
+#endif // OLED_DISPLAY
 
+// #include <Effortless_SPIFFS.h>
 #include <string>
 
 #define NUM_KEYS 8
@@ -55,7 +29,7 @@
 
 #define KEYSTORE_LABEL_MAXLEN 32
 #define KEYSTORE_MACRO_MAXLEN 64
-#define PARAM_LEN KEYSTORE_MACRO_MAXLEN * 4;
+#define PARAM_LEN KEYSTORE_MACRO_MAXLEN * 4
 
 #define FSH(s) reinterpret_cast<const __FlashStringHelper *>(s)
 
@@ -70,6 +44,9 @@
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
+#define PIN_RESET 9
+
+MuxMux mux;
 //ktypedef struct
 //k{
 //k    const __FlashStringHelper * label;
@@ -85,34 +62,36 @@ typedef struct
 }Command;
 
 
-//struct {
-////    uint8_t fontIndex;
-////    uint8_t size;
-//    uint8_t param[PARAM_LEN];
-//    uint8_t paramIndex;
-//    int32_t numericParam;
-//    bool accumParameter;
-//}config;
+
+struct {
+//    uint8_t fontIndex;
+//    uint8_t size;
+    uint8_t param[PARAM_LEN];
+    uint8_t paramIndex;
+    int32_t numericParam;
+    bool accumParameter;
+}config;
 int32_t numericParameter;
 #ifdef FINGER
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
 #endif // FINGER
 
-#ifdef DISPLAY
+// eSPIFFS fileSystem(&Serial);
+#ifdef OLED_DISPLAY
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-#endif // DISPLAY
+#endif // OLED_DISPLAY
 //Keyboard kb();
 Command * command_set;
 extern Command commands_main[];
 extern Command commands_fingerprint[];
+extern Command commands_i2c[];
 
-//jFontSel fonts[] = {
-//j    { F("Sans9pt7b"), &FreeSans9pt7b },
-//j    { F("Sans12pt7b"), &FreeSans12pt7b }
-//j};
-//j
-//j#define NUM_FONTS (sizeof(fonts)/sizeof(fonts[0]))
-
+// FontSel fonts[] = {
+//     { F("Sans9pt7b"), &FreeSans9pt7b },
+//     { F("Sans12pt7b"), &FreeSans12pt7b }
+// };
+// 
+// #define NUM_FONTS (sizeof(fonts)/sizeof(fonts[0]))
 
 void handleCommand(uint8_t command);
 void cmd_help();
@@ -123,15 +102,16 @@ void cmd_clear_numeric_parameter(void);
 void cmd_test_key(void);
 void cmd_upload_keydefs(void);
 void cmd_show_config(void);
-void handleCommand(uint8_t command);
 void key_store_init(Preferences ks);
-void cmd_serial2_test_string(void);
+// void cmd_serial2_test_string(void);
+// void cmd_receive_yaml(void);
 void setup(void);
 #ifdef FINGER
 void fingerprint_error(int8_t);
 void cmd_fingerprint_init();
 void cmd_fingerprint_menu(void);
 void cmd_fingerprint_ledtest(void);
+void cmd_fingerprint_ledtest2(void);
 void cmd_fingerprint_delete(int32_t);
 void cmd_fingerprint_enroll();
 #endif // FINGER
@@ -150,14 +130,14 @@ void cmd_help()
 
 void redisplay()
 {
-#ifdef DISPLAY
+#ifdef OLED_DISPLAY
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);        // Draw white text
     display.setCursor(0, SCREEN_HEIGHT-1);             // Start at top-left corner
     display.setFont(&FreeSans12pt7b);
     display.display();
-#endif // DISPLAY
+#endif // OLED_DISPLAY
 }
 
 //void cmd_face_select(void)
@@ -193,6 +173,7 @@ void cmd_show_config(void)
     Serial.printf(F("Baud rate: %u\r\n"), finger.baud_rate);
     Serial.printf(F("Template Count %d\r\n"), finger.getTemplateCount());
 #endif // FINGER
+    Serial.println(F("Reading sensor parameters"));
 //    Preferences key_store;
 //    key_store.begin(KEYSTORE_NAME, KEYSTORE_RO);
 //    Serial.printf(F("Text Parameter Index %u\r\n"), config.paramIndex);
@@ -308,30 +289,65 @@ void cmd_test_key(void)
 //    key_store.end();
 }
 
+// void cmd_upload_keydefs(void)
+// {
+// }
+// 
+// void cmd_serial2_test_string(void)
+// {
+//     Serial2.print("abcdefghasdfasd");
+// }
+
+//bool xmodem_receive_block(void *blk_id, size_t idSize, byte *data, size_t dataSize) 
+//{
+//  byte id = *((byte *) blk_id);
+//  for(int i = 0; i < dataSize; ++i) {
+//    //do stuff with the recieved data
+//  }
+//  //return false to stop the transfer early
+//  return false;
+//}
+
 void cmd_upload_keydefs(void)
 {
+    char end_string[16];
+    sprintf(end_string, "%d", numericParameter);
+    Serial.println(F("Keydef Upload Start"));
+    Serial.println(F("Keydef Upload End"));
 }
 
-void cmd_serial2_test_string(void)
+void cmd_i2c_scan(void)
 {
-    Serial2.print("abcdefghasdfasd");
+    i2c_scanner();
 }
+
+// void cmd_spiffs_test(void)
+// {
+//     fileSystem.checkFlashConfig();
+//     
+// //    if (!fileSystem.checkFlashConfig()) {
+// //      Serial.println("Flash size was not correct! Please check your SPIFFS config and try again");
+// //    }
+// }
 
 Command commands_main[] = {
 {'?',F("Show Configuration"), [](){ cmd_show_config();}},
 {'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter();}},
-{'C',F("Clear Keystore"), [](){ cmd_clear_keystore();}},
+//{'C',F("Clear Keystore"), [](){ cmd_clear_keystore();}},
 #ifdef FINGER
 {'f',F("Fingerprint Menu"), [](){ cmd_fingerprint_menu(); }},
 #endif // FINGER
 //{'f',F("Font Select"), [](){ cmd_face_select();}},
 {'h',F("Help"), [](){ cmd_help();}},
+{'i',F("I2C Menu"), [](){ command_set = commands_i2c;}},
 //{'l',F("Set Label"), [](){ cmd_set_label();}},
 //{'m',F("Set Macro"), [](){ cmd_set_macro();}},
 //{'p',F("Input Parameter"), [](){ cmd_input_parameter(); }},
-{'s',F("Serial2 test string"), [](){ cmd_serial2_test_string(); }},
-{'t',F("Test key (parameter)"), [](){ cmd_test_key(); }},
-{'u',F("Upload key definitions"), [](){ cmd_upload_keydefs(); }},
+//{'s',F("Serial2 test string"), [](){ cmd_serial2_test_string(); }},
+//{'s',F("SPIFFS Test"), [](){ cmd_spiffs_test(); }},
+//{'t',F("Test key (parameter)"), [](){ cmd_test_key(); }},
+//{'u',F("Upload key definitions"), [](){ cmd_upload_keydefs(); }},
+//{'y',F("Upload YAML File"), [](){ cmd_upload_yaml(); }},
 {' ',F("Reset"), [](){ cmd_reset(); }},
 {'&',F("Reset"), [](){ cmd_reset(); }}
 };
@@ -352,8 +368,8 @@ void fingerprint_error(int8_t id)
         Serial.println(F("FINGERPRINT_IMAGEFAIL")); break;
     case FINGERPRINT_IMAGEMESS:
         Serial.println(F("FINGERPRINT_IMAGEMESS")); break;
-    case FINGERPRINT_FEATUREFAI:
-        Serial.println(F("FINGERPRINT_FEATUREFAI")); break;
+    case FINGERPRINT_FEATUREFAIL:
+        Serial.println(F("FINGERPRINT_FEATUREFAIL")); break;
     case FINGERPRINT_NOMATCH:
         Serial.println(F("FINGERPRINT_NOMATCH")); break;
     case FINGERPRINT_NOTFOUND:
@@ -376,10 +392,10 @@ void fingerprint_error(int8_t id)
         Serial.println(F("FINGERPRINT_DBCLEARFAIL")); break;
     case FINGERPRINT_PASSFAIL:
         Serial.println(F("FINGERPRINT_PASSFAIL")); break;
-    case FINGERPRINT_INVALIDIMAGE                                               \:
-        Serial.println(F("FINGERPRINT_INVALIDIMAGE                                               \")); break;
-    case FINGERPRINT_FLASHER:
-        Serial.println(F("FINGERPRINT_FLASHER")); break;
+    case FINGERPRINT_INVALIDIMAGE:
+        Serial.println(F("FINGERPRINT_INVALIDIMAGE")); break;
+    case FINGERPRINT_FLASHERR:
+        Serial.println(F("FINGERPRINT_FLASHERR")); break;
     case FINGERPRINT_INVALIDREG:
         Serial.println(F("FINGERPRINT_INVALIDREG")); break;
     case FINGERPRINT_ADDRCODE:
@@ -425,6 +441,17 @@ void cmd_fingerprint_init()
 }
 
 void cmd_fingerprint_ledtest(void)
+{
+    for (uint8_t ii = 0; ii < 10; ii++)
+    {
+        finger.LEDcontrol(true);
+        delay(100);
+        finger.LEDcontrol(false);
+        delay(100);
+    }
+}
+
+void cmd_fingerprint_ledtest2(void)
 {
     Serial.println(F("cmd_fingerprint_ledtest begins"));
     finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_RED);
@@ -543,6 +570,31 @@ Command commands_fingerprint[] = {
 
 #endif // FINGER
 
+void cmd_show_i2c_config()
+{
+    Serial.println(F("I2C Config"));
+    Serial.printf(F("Current Port: %d\r\n"), mux.getPort());
+}
+
+Command commands_i2c[] = {
+{'?',F("Show Configuration"), [](){ cmd_show_i2c_config();}},
+//{'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter();}},
+//{'C',F("Clear Keystore"), [](){ cmd_clear_keystore();}},
+//{'f',F("Font Select"), [](){ cmd_face_select();}},
+{'h',F("Help"), [](){ cmd_help();}},
+//{'i',F("I2C Scan"), [](){ cmd_i2c_scan();}},
+//{'l',F("Set Label"), [](){ cmd_set_label();}},
+//{'m',F("Set Macro"), [](){ cmd_set_macro();}},
+{'p',F("Port Select"), [](){ mux.setPort(config.numericParam); }},
+//{'s',F("Serial2 test string"), [](){ cmd_serial2_test_string(); }},
+{'s',F("Device Scan"), [](){ cmd_i2c_scan(); }},
+//{'t',F("Test key (parameter)"), [](){ cmd_test_key(); }},
+//{'u',F("Upload key definitions"), [](){ cmd_upload_keydefs(); }},
+//{'y',F("Upload YAML File"), [](){ cmd_upload_yaml(); }},
+{'x',F("Back to main"), [](){ command_set = commands_main; }},
+{'&',F("Reset"), [](){ cmd_reset(); }}
+};
+
 void handleCommand(uint8_t command)
 {
 //    if (config.accumParameter == true)
@@ -585,21 +637,23 @@ void key_store_init(Preferences ks)
 
 void setup(void)
 {
-//    memset(&config, 0, sizeof(config));
+    pinMode(PIN_RESET, INPUT_PULLUP);
+//    digitalWrite(PIN_RESET, HIGH);
+    memset(&config, 0, sizeof(config));
     command_set = commands_main;
     Serial.begin(115200);
-    delay(2000);
-    Serial.println("hello");
-#ifdef DISPLAY
-    if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-        for (;;)
-        {
-            Serial.println(F("SSD1306 allocation failed"));
-            delay(1000);
-        }
-    }
-    redisplay();
-#endif // DISPLAY
+    i2c_scanner_setup();
+// #ifdef OLED_DISPLAY
+// 1/0
+//     if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+//         for (;;)
+//         {
+//             Serial.println(F("SSD1306 allocation failed"));
+//             delay(1000);
+//         }
+//     }
+//     redisplay();
+// #endif // OLED_DISPLAY
 //    Preferences key_store;
 //    key_store.begin(KEYSTORE_NAME, KEYSTORE_RW);
 //    if (false == key_store.isKey("init"))
@@ -609,10 +663,8 @@ void setup(void)
 //    key_store.end();
 }
 
-
 void loop(void)
 {
-    delay(500);
     if (Serial.available())
     {
         handleCommand(Serial.read());
