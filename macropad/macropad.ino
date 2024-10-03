@@ -2,7 +2,7 @@
 #include <Wire.h>
 #include "muxmux.h"
 //#include <oled.h>
-#include <Preferences.h>
+//#include <Preferences.h>
 //#include <Keyboard.h>
 //#include <ArduinoYaml.h>
 #ifdef FINGER
@@ -13,9 +13,13 @@
 // #ifdef DFORMAT_SPIFFS_IF_FAILED
 // #error BORK
 // #endif 
+#define OLED_DISPLAY
 #ifdef OLED_DISPLAY
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_GFX.h>
+//#include <FreeSans12pt7b.h>
 #include <Fonts/FreeSans12pt7b.h>
-#include "oled.h"
+//#include <Adafruit_GFX/Fonts/FreeSans12pt7b.h>
 #endif // OLED_DISPLAY
 
 // #include <Effortless_SPIFFS.h>
@@ -46,7 +50,6 @@
 
 #define PIN_RESET 9
 
-MuxMux mux;
 //ktypedef struct
 //k{
 //k    const __FlashStringHelper * label;
@@ -78,7 +81,8 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
 
 // eSPIFFS fileSystem(&Serial);
 #ifdef OLED_DISPLAY
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+MuxMux mux(0);
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &mux, OLED_RESET);
 #endif // OLED_DISPLAY
 //Keyboard kb();
 Command * command_set;
@@ -102,7 +106,7 @@ void cmd_clear_numeric_parameter(void);
 void cmd_test_key(void);
 void cmd_upload_keydefs(void);
 void cmd_show_config(void);
-void key_store_init(Preferences ks);
+//void key_store_init(Preferences ks);
 // void cmd_serial2_test_string(void);
 // void cmd_receive_yaml(void);
 void setup(void);
@@ -131,6 +135,7 @@ void cmd_help()
 void redisplay()
 {
 #ifdef OLED_DISPLAY
+    mux.setPort(0);
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);        // Draw white text
@@ -267,11 +272,11 @@ void cmd_clear_keystore(void)
 //        Serial.println(F("Set numeric parameter to 54321 to confirm"));
 //        return;
 //    }
-    Preferences key_store;
-    key_store.begin(KEYSTORE_NAME, KEYSTORE_RW);
-    key_store.clear();
-    key_store_init(key_store);
-    key_store.end();
+//    Preferences key_store;
+//    key_store.begin(KEYSTORE_NAME, KEYSTORE_RW);
+//    key_store.clear();
+//    key_store_init(key_store);
+//    key_store.end();
 }
 
 void cmd_clear_numeric_parameter(void)
@@ -573,7 +578,7 @@ Command commands_fingerprint[] = {
 void cmd_show_i2c_config()
 {
     Serial.println(F("I2C Config"));
-    Serial.printf(F("Current Port: %d\r\n"), mux.getPort());
+//    Serial.printf(F("Current Port: %d\r\n"), mux.getPort());
 }
 
 Command commands_i2c[] = {
@@ -617,22 +622,22 @@ void handleCommand(uint8_t command)
     }
 }
 
-void key_store_init(Preferences ks)
-{
-    Serial.println(F("key_store_init"));
-    ks.begin(KEYSTORE_NAME, KEYSTORE_RW);
-    ks.putBool("init", true);
-
-    for (uint8_t ii = 0; ii < NUM_KEYS; ii++)
-    {
-        char buffer[20];
-        sprintf(buffer, "disp%02xlabel", ii);
-        ks.putString(buffer, buffer);
-        sprintf(buffer, "disp%02xmacro", ii);
-        ks.putString(buffer, buffer);
-    }
-    Serial.println(F("key_store_init done"));
-}
+// void key_store_init(Preferences ks)
+// {
+//     Serial.println(F("key_store_init"));
+//     ks.begin(KEYSTORE_NAME, KEYSTORE_RW);
+//     ks.putBool("init", true);
+// 
+//     for (uint8_t ii = 0; ii < NUM_KEYS; ii++)
+//     {
+//         char buffer[20];
+//         sprintf(buffer, "disp%02xlabel", ii);
+//         ks.putString(buffer, buffer);
+//         sprintf(buffer, "disp%02xmacro", ii);
+//         ks.putString(buffer, buffer);
+//     }
+//     Serial.println(F("key_store_init done"));
+// }
 
 
 void setup(void)
@@ -643,17 +648,16 @@ void setup(void)
     command_set = commands_main;
     Serial.begin(115200);
     i2c_scanner_setup();
-// #ifdef OLED_DISPLAY
-// 1/0
-//     if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-//         for (;;)
-//         {
-//             Serial.println(F("SSD1306 allocation failed"));
-//             delay(1000);
-//         }
-//     }
-//     redisplay();
-// #endif // OLED_DISPLAY
+#ifdef OLED_DISPLAY
+    if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+        for (;;)
+        {
+            Serial.println(F("SSD1306 allocation failed"));
+            delay(1000);
+        }
+    }
+    redisplay();
+#endif // OLED_DISPLAY
 //    Preferences key_store;
 //    key_store.begin(KEYSTORE_NAME, KEYSTORE_RW);
 //    if (false == key_store.isKey("init"))

@@ -25,95 +25,87 @@ OneMux::OneMux(uint8_t address, TwoWire & wirePort)
 {
     _i2c = &wirePort;
     _address = address;
-    _currentPort = -1;
 }
 
-bool OneMux::setPort(int8_t port)
+//bool OneMux::setPorts(int8_t port)
+//{ 
+//    _i2c->beginTransmission(address);
+//    _i2c->write(1 << port);
+//    if (_i2c->endTransmission())
+//    {
+//        return false;
+//    }
+//    _currentPort = port;
+//    return true; 
+//}
+//
+//int8_t OneMux::getPort()
+//{ 
+//    return _currentPort;
+//}
+
+bool OneMux::write(uint8_t data)
 { 
-    _i2c->beginTransmission(address);
-    _i2c->write(1 << port);
-    if (_i2c->endTransmission())
-    {
-        return false;
-    }
-    _currentPort = port;
+    Serial.printf(F("OneMux::write %02x\r\n"), data);
     return true; 
 }
 
-int8_t OneMux::getPort()
+uint8_t OneMux::read()
 { 
-    return _currentPort;
-}
-
-bool OneMux::set(uint8_t data)
-{ 
-
-    return true; 
-}
-
-uint8_t OneMux::get()
-{ 
+    Serial.printf(F("OneMux::read\r\n"));
     return 0; 
 }
 
-bool OneMux::enable(int8_t portNumber)
-{ 
-    return true;
-}
+// bool OneMux::enable(int8_t portNumber)
+// { 
+//     return true;
+// }
+// 
+// bool OneMux::disable(int8_t portNumber)
+// { 
+//     return true;
+// }
 
-bool OneMux::disable(int8_t portNumber)
-{ 
-    return true;
-}
 
-
-MuxMux::MuxMux(TwoWire & wirePort)
+MuxMux::MuxMux(uint8_t bus_num)
+    : TwoWire(bus_num)
 {
-    _mux0 = new OneMux(ADDR_MUX0, Wire);
-    _mux1 = new OneMux(ADDR_MUX1, Wire);
+//    _mux0 = new OneMux(ADDR_MUX0, Wire);
+//    _mux1 = new OneMux(ADDR_MUX1, Wire);
 }
 
-bool MuxMux::setPort(int8_t port)
+bool MuxMux::setPort(uint8_t port)
 { 
     if (port > 15)
     {
         return false;
     }
-
-    if (port > 8)
-    {
-        _mux1->setPort(port - 8);
-        return true; 
-    }
-    _mux0->setPort(port);
     _currentPort = port;
+    return true;
+
+}
+
+size_t MuxMux::write(uint8_t data)
+{ 
+    Serial.printf(F("MuxMux::write %02x\r\n"), data);
     return true; 
 }
 
-int8_t MuxMux::getPort()
+int MuxMux::read()
 { 
-    return _currentPort; 
-}
-
-bool MuxMux::set(uint8_t data)
-{ 
-    return true; 
-}
-
-uint8_t MuxMux::get()
-{ 
+    Serial.printf(F("MuxMux::read\r\n"));
     return 0; 
 }
 
-bool MuxMux::enable(int8_t portNumber)
-{ 
-    return true;
-}
-
-bool MuxMux::disable(int8_t portNumber)
-{ 
-    return true;
-}
+// bool MuxMux::enable(int8_t portNumber)
+// { 
+//     return true;
+// }
+// 
+// bool MuxMux::disable(int8_t portNumber)
+// { 
+//     return true;
+// }
 
 void MuxMux::reset(bool state)
 {

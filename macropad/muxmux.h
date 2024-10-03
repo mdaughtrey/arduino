@@ -18,35 +18,31 @@
 #include <stdint.h>
 #include <Arduino.h>
 #include <Wire.h>
+// #include <vector>
 
-class OneMux
+class OneMux 
 {
     public:
-        int8_t _currentPort;
         uint8_t _address;
         TwoWire * _i2c;
         OneMux(uint8_t address, TwoWire & wirePort = Wire);
-        bool setPort(int8_t port);
-        int8_t getPort();
-        bool set(uint8_t data);
-        uint8_t get();
-        bool enable(int8_t portNumber = -1);
-        bool disable(int8_t portNumber = -1);
+//        bool setPorts(uint8_t ports);
+//        int8_t getPort();
+        bool write(uint8_t data);
+        uint8_t read();
 };
 
-class MuxMux
+class MuxMux : public TwoWire
 {
     public:
-        OneMux * _mux0;
-        OneMux * _mux1;
-        int8_t _currentPort;
+//        OneMux * _mux0;
+//        OneMux * _mux1;
+        uint8_t _currentPort;
 
-        MuxMux(TwoWire & wirePort = Wire);
-        bool setPort(int8_t port);
-        int8_t getPort();
-        bool set(uint8_t data);
-        uint8_t get();
-        bool enable(int8_t portNumber = -1);
-        bool disable(int8_t portNumber = -1);
+        MuxMux(uint8_t bus_num);
+        bool setPort(uint8_t port);
+  //      uint8_t getPorts();
+        size_t write(uint8_t data);
+        int read();
         void reset(bool state);
 };
