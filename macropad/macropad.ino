@@ -335,6 +335,22 @@ void cmd_i2c_scan(void)
 // //    }
 // }
 
+void cmd_oled_init()
+{
+    Serial.println(F("cmd_oled_init"));
+    mux.setPort(0);
+#ifdef OLED_DISPLAY
+    if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+        for (;;)
+        {
+            Serial.println(F("SSD1306 allocation failed"));
+            delay(1000);
+        }
+    }
+    redisplay();
+#endif // OLED_DISPLAY
+}
+
 Command commands_main[] = {
 {'?',F("Show Configuration"), [](){ cmd_show_config();}},
 {'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter();}},
@@ -347,6 +363,7 @@ Command commands_main[] = {
 {'i',F("I2C Menu"), [](){ command_set = commands_i2c;}},
 //{'l',F("Set Label"), [](){ cmd_set_label();}},
 //{'m',F("Set Macro"), [](){ cmd_set_macro();}},
+{'o',F("OLED Init"), [](){ cmd_oled_init(); }},
 //{'p',F("Input Parameter"), [](){ cmd_input_parameter(); }},
 //{'s',F("Serial2 test string"), [](){ cmd_serial2_test_string(); }},
 //{'s',F("SPIFFS Test"), [](){ cmd_spiffs_test(); }},
@@ -648,16 +665,6 @@ void setup(void)
     command_set = commands_main;
     Serial.begin(115200);
     i2c_scanner_setup();
-#ifdef OLED_DISPLAY
-    if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-        for (;;)
-        {
-            Serial.println(F("SSD1306 allocation failed"));
-            delay(1000);
-        }
-    }
-    redisplay();
-#endif // OLED_DISPLAY
 //    Preferences key_store;
 //    key_store.begin(KEYSTORE_NAME, KEYSTORE_RW);
 //    if (false == key_store.isKey("init"))

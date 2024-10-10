@@ -38,11 +38,14 @@ class MuxMux : public TwoWire
 //        OneMux * _mux0;
 //        OneMux * _mux1;
         uint8_t _currentPort;
+        uint8_t _muxAddress;
 
         MuxMux(uint8_t bus_num);
         bool setPort(uint8_t port);
   //      uint8_t getPorts();
         size_t write(uint8_t data);
+        size_t write(const uint8_t * data, size_t size);
         int read();
         void reset(bool state);
+        bool isConnected();
 };

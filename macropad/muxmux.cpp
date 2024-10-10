@@ -80,7 +80,19 @@ bool MuxMux::setPort(uint8_t port)
     {
         return false;
     }
-    _currentPort = port;
+    if (port > 7)
+    {
+        _muxAddress = ADDR_MUX1;
+        _currentPort = port - 8;
+    }
+    else 
+    {
+        _muxAddress = ADDR_MUX0;
+        _currentPort = port;
+    }
+    beginTransmission(_muxAddress);
+    TwoWire::write(1 << port);
+    endTransmission();
     return true;
 
 }
@@ -88,13 +100,26 @@ bool MuxMux::setPort(uint8_t port)
 size_t MuxMux::write(uint8_t data)
 { 
     Serial.printf(F("MuxMux::write %02x\r\n"), data);
+    TwoWire::write(data);
+    return true; 
+}
+
+size_t MuxMux::write(const uint8_t * data, size_t size)
+{ 
+    Serial.printf(F("MuxMux::write %02x bytes\r\n"), size);
+    TwoWire::write(data,size);
     return true; 
 }
 
 int MuxMux::read()
 { 
     Serial.printf(F("MuxMux::read\r\n"));
-    return 0; 
+    beginTransmission(_muxAddress);
+    requestFrom(_muxAddress, uint8_t(1));
+    uint8_t response = TwoWire::read();
+    endTransmission();
+    Serial.printf(F("MuxMux::read Address %02x returns %02x\r\n"), _muxAddress, response);
+    return response;
 }
 
 // bool MuxMux::enable(int8_t portNumber)
@@ -113,3 +138,23 @@ void MuxMux::reset(bool state)
 }
 
 
+bool MuxMux::isConnected()
+{
+    beginTransmission(_muxAddress);
+    if (0 != endTransmission())
+    {
+        Serial.printf(F("MuxMux::isConnected: no device ACK from mux %02x"), _muxAddress);
+        return false;
+    }
+    TwoWire::write(0xa4);
+    requestFrom(_muxAddress, uint8_t(1));
+    uint8_t response = TwoWire::read();
+    TwoWire::write(0x00);
+    if (0xa4 != response)
+    {
+        Serial.printf(F("MuxMux::isConnected: register readback fails from mux %02x"), _muxAddress);
+        return false;
+    }
+    endTransmission();
+    return true;
+}
