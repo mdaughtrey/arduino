@@ -1,22 +1,26 @@
 #include <Arduino.h>
-#include <SoftwareSerial.h>
+//#include <YetAnotherPcInt.h>
+//#include <SoftwareSerial.h>
 #include <stdint.h>
 #include <Wire.h>
-#include <EEPROM.h>
+//#include <EEPROM.h>
 //#include <Preferences.h>
-#include <Keyboard.h>
+//#include <Keyboard.h>
+#define FINGERPRINT
 #ifdef FINGERPRINT
 #include <Adafruit_Fingerprint.h>
 #endif // FINGERPRINT
 
 // Fingerprint Sensor
-// Red VTouch
-// Black TouchOut
-// Yellow 3v3
-// Green  tx
-// Blue Rx
-// White Gnd
+// 1 White VTouch
+// 2 Blue Touchout
+// 3 Green vcc 3v3
+// 4 Yellow rx <-> controller rx
+// 5 Black tx <-> controller tx
+// 6 Red gnd
 
+const uint8_t PIN_TOUCH = 2;
+const uint8_t PIN_FINGERPRINT_POWER = 11;
 
 #define FSH(s) reinterpret_cast<const __FlashStringHelper *>(s)
 typedef struct
@@ -30,13 +34,14 @@ struct {
 //    byte param[PARAM_LEN];
 //    byte paramIndex;
     int32_t numericParam;
+    bool finger_touch;
 //    bool accumParameter;
 }config;
 
+
+
 #ifdef FINGERPRINT
-SoftwareSerial FSerial = SoftwareSerial(1,0);
-// Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial1);
-Adafruit_Fingerprint finger = Adafruit_Fingerprint(&FSerial);
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial1);
 #endif // FINGERPRINT
 
 // Command * command_set;
@@ -136,6 +141,13 @@ void cmd_clear_numeric_parameter(void)
 // {'&',F("Reset"), [](){ cmd_reset(); }}
 // };
 
+void touched() // void * ptr, bool pinstate)
+{
+    Serial.print("*");
+    config.finger_touch = true;
+    delay(500);
+}
+
 
 #ifdef FINGERPRINT
 void fingerprint_error(int8_t id)
@@ -195,28 +207,23 @@ void fingerprint_error(int8_t id)
 //     command_set = commands_fingerprint;
 // }
 
+//    attachInterrupt(digitalPinToInterrupt(FilmSensorPin8mm), isr1, RISING);
 void cmd_fingerprint_init()
 {
-  // set the data rate for the sensor serial port
-//    Serial.println(F("Sensor Check 1"));
-//  Serial1.begin(57600);
-//    Serial.println(F("Sensor Check 2"));
-//  finger.begin(57600);
-//    Serial.println(F("Sensor Check 3"));
-    delay(1000);
+    Serial.println(F("cmd_fingerprint_init"));
 
-  if (finger.verifyPassword()) 
-  {
-      Serial.println(F("Found fingerprint sensor"));
-  }
-  else
-  {
-    while (1)
-    {
-        Serial.println(F("No fingerprint sensor"));
-        return;
-    }
-  }
+      if (finger.verifyPassword()) 
+      {
+          Serial.println(F("Found fingerprint sensor"));
+      }
+      else
+      {
+        while (1)
+        {
+            Serial.println(F("No fingerprint sensor"));
+            return;
+        }
+      }
 
 //  Serial.println(F("Reading sensor parameters"));
 //  finger.getParameters();
@@ -234,34 +241,22 @@ void cmd_fingerprint_ledtest(void)
     for (byte ii = 0; ii < 10; ii++)
     {
         finger.LEDcontrol(true);
-        delay(100);
+        delay(1000);
         finger.LEDcontrol(false);
-        delay(100);
+        delay(1000);
     }
 }
 
 void cmd_fingerprint_ledtest2(void)
 {
-    Serial.println(F("cmd_fingerprint_ledtest begins"));
-    finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_RED);
-    delay(250);
-    finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_BLUE);
-    delay(250);
-    finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_PURPLE);
-    delay(250);
-
-    // flash red LED
-    finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 10);
-    delay(2000);
-    // Breathe blue LED till we say to stop
-    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_BLUE);
-    delay(3000);
-    finger.LEDcontrol(FINGERPRINT_LED_GRADUAL_ON, 200, FINGERPRINT_LED_PURPLE);
-    delay(2000);
-    finger.LEDcontrol(FINGERPRINT_LED_GRADUAL_OFF, 200, FINGERPRINT_LED_PURPLE);
-    delay(2000);
-    Serial.println(F("cmd_fingerprint_ledtest ends"));
-}
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING,
+        128,
+        10,
+        100);
+//uint8_t Adafruit_Fingerprint::LEDcontrol(uint8_t control, uint8_t speed,
+//                                         uint8_t coloridx, uint8_t count) {
+//  SEND_CMD_PACKET(FINGERPRINT_AURALEDCONFIG, control, speed, coloridx, count);
+} 
 
 void cmd_fingerprint_delete(int32_t id)
 {
@@ -278,7 +273,7 @@ void cmd_fingerprint_clear()
 void cmd_fingerprint_enroll(int32_t id)
 {
     int p = -1;
-//    Serial.printf(F("Waiting for valid finger to enroll as #%u\r\n"), id);
+    Serial.println(F("Waiting for valid finger"));
     while (p != FINGERPRINT_OK) {
         p = finger.getImage();
         fingerprint_error(p);
@@ -312,7 +307,7 @@ void cmd_fingerprint_enroll(int32_t id)
     p = finger.image2Tz(2);
     fingerprint_error(p);
     // OK converted!
-//    Serial.printf(F("Creating model for id %d\r\n"), id);
+    Serial.println(F("Creating model"));
 
     p = finger.createModel();
     fingerprint_error(p);
@@ -358,13 +353,12 @@ void cmd_fingerprint_get_id()
 // {'&',F("Reset"), [](){ cmd_reset(); }}
 // };
 
-const char message[] PROGMEM = "Hello";
-
+#ifdef EEPROM
 void cmd_keyboard_write()
 {
     byte index = 0;
     Serial.println("write");
-    Keyboard.begin();
+//    Keyboard.begin();
 //    Keyboard.releaseAll();
     while (1)
     {
@@ -372,10 +366,10 @@ void cmd_keyboard_write()
         if (cc == '\0')
             break;
         Serial.print(cc);
-        Keyboard.write(cc);
+//        Keyboard.write(cc);
         delay(100);
     }
-    Keyboard.end();
+//    Keyboard.end();
 }
 
 void cmd_record_password()
@@ -396,18 +390,92 @@ void cmd_record_password()
         }
     }
 }
+#endif // EEPROM
+
+#ifdef FINGERPRINT
+void cmd_led_demo()
+{
+  // LED fully on
+  finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_RED);
+  delay(250);
+  finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_BLUE);
+  delay(250);
+  finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_PURPLE);
+  delay(250);
+
+  // flash red LED
+  finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 10);
+  delay(2000);
+  // Breathe blue LED till we say to stop
+  finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_BLUE);
+  delay(3000);
+  finger.LEDcontrol(FINGERPRINT_LED_GRADUAL_ON, 200, FINGERPRINT_LED_PURPLE);
+  delay(2000);
+  finger.LEDcontrol(FINGERPRINT_LED_GRADUAL_OFF, 200, FINGERPRINT_LED_PURPLE);
+  delay(2000);
+}
+
+#endif // FINGERPRINT
+
+void cmd_poll()
+{
+    for (uint8_t ii = 0; ii < 20; ii++)
+    {
+        Serial.println(digitalRead(PIN_TOUCH));
+        delay(500);
+    }
+}
 
 void handleCommand(byte command)
 {
     switch (command)
     {
-        case 'w': 
-            cmd_keyboard_write();
+//        case 'i': 
+//            i2c_scanner();
+//            break;
+        case 'o': cmd_poll(); break;
+#ifdef FINGERPRINT
+        case 'c': fingerprint_error(finger.createModel()); break;
+        case 'd': cmd_led_demo(); break;
+        case 'e': cmd_fingerprint_enroll(0); break;
+        case 'C': cmd_show_config(); break;
+        case 'g': cmd_fingerprint_get_id(); break;
+        case 'i': cmd_fingerprint_init(); break;
+        case 'p': digitalWrite(PIN_FINGERPRINT_POWER, 0); break;
+        case 'P': digitalWrite(PIN_FINGERPRINT_POWER, 1); break;
+        case 's': fingerprint_error(finger.storeModel(0)); break;
+        case 't': Serial.println(finger.getTemplateCount()); break;
+        case 'f': Serial.println(finger.fingerFastSearch()); break;
+        
+//        case 'L':
+//            cmd_fingerprint_ledtest();
+//            break;
+#endif // FINGERPRINT
+        default:
+            Serial.println(F("c = create model"));
+            Serial.println(F("d = LED demo"));
+            Serial.println(F("e = enroll"));
+            Serial.println(F("C = config"));
+            Serial.println(F("g = get"));
+            Serial.println(F("i = init"));
+            Serial.println(F("o = poll"));
+            Serial.println(F("p = sensor OFF"));
+            Serial.println(F("P = sensor ON"));
+            Serial.println(F("s = store"));
+            Serial.println(F("t = template count"));
+            Serial.println(F("f = fastsearch"));
             break;
-
-        case 'r':
-            cmd_record_password();
-            break;
+//        case 'w': 
+//            cmd_keyboard_write();
+//            break;
+//
+//        case 'r':
+//            cmd_record_password();
+//            break;
+//
+//        default:
+//            Serial.println("iflwr");
+//            break;
     }
 }
 
@@ -436,24 +504,39 @@ void handleCommand(byte command)
 void setup(void)
 {
     memset(&config, 0, sizeof(config));
-//    command_set = commands_main;
     Serial.begin(115200);
+
+//    PCICR |= (1 << PCIE0);
+//    PCMSK0 |= (1 << PCINT6);
+
 #ifdef FINGERPRINT
-    FSerial.begin(57600);
+    Serial1.begin(57600);
 #endif // FINGERPRINT
-//    Serial1.begin(1200);
+//    pinMode(PIN_FINGERPRINT_POWER, OUTPUT);
+//    digitalWrite(PIN_FINGERPRINT_POWER, 0);
+
+    pinMode(PIN_TOUCH, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(PIN_TOUCH), touched, RISING);
+//    attachInterrupt(digitalPinToInterrupt(FilmSensorPin8mm), isr1, RISING);
 }
 
 void loop(void)
 {
 //    Serial1.println(F("Hello"));
 //    Serial.println(F("Hello"));
-//    delay(1000);
+    if (true == config.finger_touch)
+    {
+        Serial.println("Touched");
+#ifdef FINGERPRINT
+        cmd_fingerprint_get_id();
+#endif // FINGERPRINT
+        config.finger_touch = false;
+    }
     if (Serial.available())
     {
         handleCommand(Serial.read());
 #ifdef FINGERPRINT
-        cmd_fingerprint_init();
+//        cmd_fingerprint_init();
 #endif // FINGERPRINT
 //        handleCommand(Serial.read());
     }

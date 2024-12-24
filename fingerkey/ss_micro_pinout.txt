@@ -1,0 +1,17 @@
+
+AVR SS Micro Pinout
+
+MO D16  -              - A2
+SCK D15 -    ----      - A1
+MI D14  -   |    |     - A0
+RES     -   |    |     - A10 D9
+5V      -    ----      - A11 D10
+GND     -              - D11
+           | | | | | |
+         3V3 | | | | |
+        SCL/D3 | | | |
+          SDA/D2 | | |
+             TX/D1 | |
+               RX/D0 |
+                 A8/D6
+
