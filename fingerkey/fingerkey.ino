@@ -3,6 +3,8 @@
 //#include <SoftwareSerial.h>
 #include <stdint.h>
 #include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 //#include <EEPROM.h>
 //#include <Preferences.h>
 //#include <Keyboard.h>
@@ -10,6 +12,7 @@
 #ifdef FINGERPRINT
 #include <Adafruit_Fingerprint.h>
 #endif // FINGERPRINT
+
 
 // Fingerprint Sensor
 // 1 White VTouch
@@ -19,8 +22,21 @@
 // 5 Black tx <-> controller tx
 // 6 Red gnd
 
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+// The pins for I2C are defined by the Wire-library. 
+// On an arduino UNO:       A4(SDA), A5(SCL)
+// On an arduino MEGA 2560: 20(SDA), 21(SCL)
+// On an arduino LEONARDO:   2(SDA),  3(SCL), ...
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire1, OLED_RESET);
+
 const uint8_t PIN_TOUCH = 2;
-const uint8_t PIN_FINGERPRINT_POWER = 11;
+const uint8_t PIN_FINGERPRINT_POWER = 15;
 
 #define FSH(s) reinterpret_cast<const __FlashStringHelper *>(s)
 typedef struct
@@ -63,7 +79,7 @@ void cmd_fingerprint_menu(void);
 void cmd_fingerprint_ledtest(void);
 void cmd_fingerprint_ledtest2(void);
 void cmd_fingerprint_delete(int32_t);
-void cmd_fingerprint_enroll();
+void cmd_fingerprint_enroll(uint8_t);
 #endif // FINGERPRINT
 void loop(void);
 
@@ -143,9 +159,7 @@ void cmd_clear_numeric_parameter(void)
 
 void touched() // void * ptr, bool pinstate)
 {
-    Serial.print("*");
     config.finger_touch = true;
-    delay(500);
 }
 
 
@@ -270,13 +284,13 @@ void cmd_fingerprint_clear()
     finger.emptyDatabase();
 }
 
-void cmd_fingerprint_enroll(int32_t id)
+void cmd_fingerprint_enroll(uint8_t id)
 {
     int p = -1;
     Serial.println(F("Waiting for valid finger"));
     while (p != FINGERPRINT_OK) {
         p = finger.getImage();
-        fingerprint_error(p);
+//        fingerprint_error(p);
     }
 
     // OK success!
@@ -301,7 +315,7 @@ void cmd_fingerprint_enroll(int32_t id)
     while (p != FINGERPRINT_OK) 
     {
         p = finger.getImage();
-        fingerprint_error(p);
+ //       fingerprint_error(p);
     }
 
     p = finger.image2Tz(2);
@@ -314,10 +328,6 @@ void cmd_fingerprint_enroll(int32_t id)
 
     p = finger.storeModel(id);
     fingerprint_error(p);
-    if (FINGERPRINT_OK != p)
-    {
-        return;
-    }
 }
 
 void cmd_fingerprint_get_id()
@@ -426,6 +436,26 @@ void cmd_poll()
     }
 }
 
+void cmd_fingerprint_touched()
+{
+    digitalWrite(PIN_FINGERPRINT_POWER, 1);
+    delay(200);
+    cmd_fingerprint_get_id();
+    delay(500);
+    digitalWrite(PIN_FINGERPRINT_POWER, 0);
+}
+
+void cmd_oled_demo()
+{
+    if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) 
+    {
+        Serial.println(F("SSD1306 allocation failed"));
+        return;
+    }
+    Serial.println(F("SSD1305 Init Ok"));
+    display.display();
+}
+
 void handleCommand(byte command)
 {
     switch (command)
@@ -436,16 +466,23 @@ void handleCommand(byte command)
         case 'o': cmd_poll(); break;
 #ifdef FINGERPRINT
         case 'c': fingerprint_error(finger.createModel()); break;
-        case 'd': cmd_led_demo(); break;
+        case 'd': cmd_oled_demo(); break;
         case 'e': cmd_fingerprint_enroll(0); break;
         case 'C': cmd_show_config(); break;
         case 'g': cmd_fingerprint_get_id(); break;
         case 'i': cmd_fingerprint_init(); break;
         case 'p': digitalWrite(PIN_FINGERPRINT_POWER, 0); break;
         case 'P': digitalWrite(PIN_FINGERPRINT_POWER, 1); break;
-        case 's': fingerprint_error(finger.storeModel(0)); break;
-        case 't': Serial.println(finger.getTemplateCount()); break;
+        case 's': i2c_scanner(&Wire1); break;
+        case 't': cmd_fingerprint_touched(); break;
+        case 'T': Serial.println(finger.getTemplateCount()); break;
         case 'f': Serial.println(finger.fingerFastSearch()); break;
+        case 'x':
+            Serial.print(F("SDA: "));
+            Serial.println(PIN_WIRE1_SDA);
+            Serial.print(F("SCL: "));
+            Serial.println(PIN_WIRE1_SCL);
+            break;
         
 //        case 'L':
 //            cmd_fingerprint_ledtest();
@@ -453,7 +490,7 @@ void handleCommand(byte command)
 #endif // FINGERPRINT
         default:
             Serial.println(F("c = create model"));
-            Serial.println(F("d = LED demo"));
+            Serial.println(F("d = OLED demo"));
             Serial.println(F("e = enroll"));
             Serial.println(F("C = config"));
             Serial.println(F("g = get"));
@@ -461,7 +498,7 @@ void handleCommand(byte command)
             Serial.println(F("o = poll"));
             Serial.println(F("p = sensor OFF"));
             Serial.println(F("P = sensor ON"));
-            Serial.println(F("s = store"));
+            Serial.println(F("s = i2c scanner"));
             Serial.println(F("t = template count"));
             Serial.println(F("f = fastsearch"));
             break;
@@ -512,8 +549,12 @@ void setup(void)
 #ifdef FINGERPRINT
     Serial1.begin(57600);
 #endif // FINGERPRINT
-//    pinMode(PIN_FINGERPRINT_POWER, OUTPUT);
-//    digitalWrite(PIN_FINGERPRINT_POWER, 0);
+    pinMode(PIN_FINGERPRINT_POWER, OUTPUT);
+    digitalWrite(PIN_FINGERPRINT_POWER, 0);
+//    delay(100);
+//    cmd_fingerprint_init();
+//    delay(100);
+//    digitalWrite(PIN_FINGERPRINT_POWER, 1);
 
     pinMode(PIN_TOUCH, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(PIN_TOUCH), touched, RISING);
@@ -527,9 +568,14 @@ void loop(void)
     if (true == config.finger_touch)
     {
         Serial.println("Touched");
-#ifdef FINGERPRINT
-        cmd_fingerprint_get_id();
-#endif // FINGERPRINT
+//        cmd_fingerprint_touched();
+//#ifdef FINGERPRINT
+//        cmd_fingerprint_get_id();
+//#endif // FINGERPRINT
+//        digitalWrite(PIN_FINGERPRINT_POWER, 0);
+//        delay(100);
+//        Serial.println(finger.fingerFastSearch());
+//        digitalWrite(PIN_FINGERPRINT_POWER, 1);
         config.finger_touch = false;
     }
     if (Serial.available())
