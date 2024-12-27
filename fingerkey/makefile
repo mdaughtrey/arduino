@@ -2,7 +2,7 @@ ACLI=~/acli/bin/arduino-cli
 PROJ=fingerkey
 PORT=/dev/ttyACM0
 #PORT=/dev/ttyS0
-PLATFORM=rp2040:rp2040:generic
+PLATFORM=rp2040:rp2040:rpipico
 IMAGE=${PROJ}.ino.bin
 UF2=${PROJ}.ino.uf2
 ELF=${PROJ}.ino.elf
@@ -32,7 +32,7 @@ br:
 	
 # Build
 b:
-	${ACLI} compile --clean ${PROJ}.ino -b ${PLATFORM} --output-dir .
+	${ACLI} compile --build-path buildfiles  ${PROJ}.ino -b ${PLATFORM} --output-dir .
 
 # Upload remote
 #ur: 
@@ -67,7 +67,7 @@ c:
 #	./mntrp2040.sh
 #	sudo cp  ${UF2} ${MOUNT}
 #us:
-#	esptool --port ${PORT} --chip esp8266 --baud 460800 write_flash --flash_size=detect 0 ~${PROJDIR}/${IMAGE}
+#	esptool --port ${PORT}. --chip esp8266 --baud 460800 write_flash --flash_size=detect 0 ~${PROJDIR}/${IMAGE}
 #	screen ${PORT} 115200
 
 sshfs:
@@ -85,6 +85,9 @@ m:
 
 um:
 	sudo umount ${MOUNT}
+
+g:
+	ctags --recurse --languages=c++ . ~/Arduino ~/.arduino15
 
 cp:
 	sudo cp ${UF2} ${MOUNT}

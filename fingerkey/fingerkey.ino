@@ -3,8 +3,11 @@
 //#include <SoftwareSerial.h>
 #include <stdint.h>
 #include <Wire.h>
+#define OLED
+#ifdef OLED
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#endif // OLED
 //#include <EEPROM.h>
 //#include <Preferences.h>
 //#include <Keyboard.h>
@@ -33,10 +36,18 @@
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
+#ifdef OLED
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire1, OLED_RESET);
+#endif // OLED
+
 
 const uint8_t PIN_TOUCH = 2;
+const uint8_t PIN_FINGERPRINT_RX = 5;
+const uint8_t PIN_FINGERPRINT_TX = 4;
 const uint8_t PIN_FINGERPRINT_POWER = 15;
+
+const uint8_t PIN_OLED_SDA = 26;
+const uint8_t PIN_OLED_SCL = 27;
 
 #define FSH(s) reinterpret_cast<const __FlashStringHelper *>(s)
 typedef struct
@@ -438,22 +449,26 @@ void cmd_poll()
 
 void cmd_fingerprint_touched()
 {
+#ifdef FINGERPRINT
     digitalWrite(PIN_FINGERPRINT_POWER, 1);
     delay(200);
     cmd_fingerprint_get_id();
     delay(500);
     digitalWrite(PIN_FINGERPRINT_POWER, 0);
+#endif // FINGERPRINT
 }
 
 void cmd_oled_demo()
 {
+#ifdef OLED
     if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) 
     {
         Serial.println(F("SSD1306 allocation failed"));
         return;
     }
-    Serial.println(F("SSD1305 Init Ok"));
+    Serial.println(F("SSD1306 Init Ok"));
     display.display();
+#endif // OLED
 }
 
 void handleCommand(byte command)
@@ -464,30 +479,26 @@ void handleCommand(byte command)
 //            i2c_scanner();
 //            break;
         case 'o': cmd_poll(); break;
+#ifdef OLED
+        case 'd': cmd_oled_demo(); break;
+#endif // OLEd
 #ifdef FINGERPRINT
         case 'c': fingerprint_error(finger.createModel()); break;
-        case 'd': cmd_oled_demo(); break;
         case 'e': cmd_fingerprint_enroll(0); break;
         case 'C': cmd_show_config(); break;
         case 'g': cmd_fingerprint_get_id(); break;
         case 'i': cmd_fingerprint_init(); break;
         case 'p': digitalWrite(PIN_FINGERPRINT_POWER, 0); break;
         case 'P': digitalWrite(PIN_FINGERPRINT_POWER, 1); break;
-        case 's': i2c_scanner(&Wire1); break;
         case 't': cmd_fingerprint_touched(); break;
         case 'T': Serial.println(finger.getTemplateCount()); break;
         case 'f': Serial.println(finger.fingerFastSearch()); break;
-        case 'x':
-            Serial.print(F("SDA: "));
-            Serial.println(PIN_WIRE1_SDA);
-            Serial.print(F("SCL: "));
-            Serial.println(PIN_WIRE1_SCL);
-            break;
         
 //        case 'L':
 //            cmd_fingerprint_ledtest();
 //            break;
 #endif // FINGERPRINT
+        case 's': i2c_scanner(&Wire1); break;
         default:
             Serial.println(F("c = create model"));
             Serial.println(F("d = OLED demo"));
@@ -547,6 +558,8 @@ void setup(void)
 //    PCMSK0 |= (1 << PCINT6);
 
 #ifdef FINGERPRINT
+//    Serial1.setTX(PIN_FINGERPRINT_TX);
+//    Serial1.setRX(PIN_FINGERPRINT_RX);
     Serial1.begin(57600);
 #endif // FINGERPRINT
     pinMode(PIN_FINGERPRINT_POWER, OUTPUT);
@@ -555,6 +568,11 @@ void setup(void)
 //    cmd_fingerprint_init();
 //    delay(100);
 //    digitalWrite(PIN_FINGERPRINT_POWER, 1);
+    Wire1.setSDA(PIN_OLED_SDA);
+    Wire1.setSCL(PIN_OLED_SCL);
+    Wire1.begin();
+    Wire.begin();
+
 
     pinMode(PIN_TOUCH, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(PIN_TOUCH), touched, RISING);
@@ -581,9 +599,6 @@ void loop(void)
     if (Serial.available())
     {
         handleCommand(Serial.read());
-#ifdef FINGERPRINT
-//        cmd_fingerprint_init();
-#endif // FINGERPRINT
 //        handleCommand(Serial.read());
     }
 }
