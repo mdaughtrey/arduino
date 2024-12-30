@@ -7,6 +7,7 @@
 #ifdef OLED
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Fonts/FreeSans12pt7b.h>
 #endif // OLED
 //#include <EEPROM.h>
 //#include <Preferences.h>
@@ -15,6 +16,9 @@
 #ifdef FINGERPRINT
 #include <Adafruit_Fingerprint.h>
 #endif // FINGERPRINT
+#include <AsyncTimer.h>
+
+AsyncTimer at;
 
 
 // Fingerprint Sensor
@@ -63,19 +67,14 @@ struct {
     int32_t numericParam;
     bool finger_touch;
 //    bool accumParameter;
+    uint8_t numClicks;
 }config;
-
 
 
 #ifdef FINGERPRINT
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial1);
 #endif // FINGERPRINT
 
-// Command * command_set;
-// extern Command commands_main[];
-// extern Command commands_fingerprint[];
-
-// void handleCommand(byte command);
 void cmd_help();
 void cmd_reset(void);
 void cmd_clear_numeric_parameter(void);
@@ -94,16 +93,49 @@ void cmd_fingerprint_enroll(uint8_t);
 #endif // FINGERPRINT
 void loop(void);
 
-//const char dashes[] PROGMEM="-------------------------------------------------------\r\n";
+// --------------------------------------------------------------------------
+// OLED Routines
+// --------------------------------------------------------------------------
+void cmd_oled_init();
 
-// void cmd_help()
-// {
-//     Serial.println(F("-------------------------------------------------------"));
-//     for (Command * iter = command_set; iter->key != '&'; iter++)
-//     {
-//         Serial.printf(F("%c: %s\r\n"), iter->key, iter->help);
-//     }
-// }
+void cmd_oled_init()
+{
+#ifdef OLED
+    if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) 
+    {
+        Serial.println(F("SSD1306 allocation failed"));
+        return;
+    }
+    Serial.println(F("SSD1306 Init Ok"));
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);        // Draw white text
+    display.setCursor(0, SCREEN_HEIGHT-1);             // Start at top-left corner
+    display.setFont(&FreeSans12pt7b);
+    display.display();
+//    oled_redisplay();
+#endif // OLED
+}
+
+void cmd_oled_demo()
+{
+    cmd_oled_init();
+    for (uint8_t ii = 0; ii < 5; ii++)
+    {
+        display.clearDisplay();
+        display.setCursor(0, SCREEN_HEIGHT-8);             // Start at top-left corner
+        display.println(F("Hello"));
+        display.display();
+        delay(500);
+        display.clearDisplay();
+        display.setCursor(0, SCREEN_HEIGHT-8);             // Start at top-left corner
+        display.println(F("Goodbye"));
+        display.display();
+        delay(500);
+    }
+    display.clearDisplay();
+    display.display();
+}
 
 void cmd_show_config(void)
 {
@@ -147,32 +179,10 @@ void cmd_clear_numeric_parameter(void)
     config.numericParam = 0;
 }
 
-
-// Command commands_main[] = {
-// {'?',F("Show Configuration"), [](){ cmd_show_config();}},
-// {'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter();}},
-// //{'C',F("Clear Keystore"), [](){ cmd_clear_keystore();}},
-// #ifdef FINGER
-// {'f',F("Fingerprint Menu"), [](){ cmd_fingerprint_menu(); }},
-// #endif // FINGER
-// //{'f',F("Font Select"), [](){ cmd_face_select();}},
-// {'h',F("Help"), [](){ cmd_help();}},
-// //{'l',F("Set Label"), [](){ cmd_set_label();}},
-// //{'m',F("Set Macro"), [](){ cmd_set_macro();}},
-// //{'p',F("Input Parameter"), [](){ cmd_input_parameter(); }},
-// //{'s',F("Serial2 test string"), [](){ cmd_serial2_test_string(); }},
-// //{'s',F("SPIFFS Test"), [](){ cmd_spiffs_test(); }},
-// //{'u',F("Upload key definitions"), [](){ cmd_upload_keydefs(); }},
-// //{'y',F("Upload YAML File"), [](){ cmd_upload_yaml(); }},
-// {' ',F("Reset"), [](){ cmd_reset(); }},
-// {'&',F("Reset"), [](){ cmd_reset(); }}
-// };
-
 void touched() // void * ptr, bool pinstate)
 {
     config.finger_touch = true;
 }
-
 
 #ifdef FINGERPRINT
 void fingerprint_error(int8_t id)
@@ -227,12 +237,6 @@ void fingerprint_error(int8_t id)
     }
 }
 
-// void cmd_fingerprint_menu(void)
-// {
-//     command_set = commands_fingerprint;
-// }
-
-//    attachInterrupt(digitalPinToInterrupt(FilmSensorPin8mm), isr1, RISING);
 void cmd_fingerprint_init()
 {
     Serial.println(F("cmd_fingerprint_init"));
@@ -341,38 +345,38 @@ void cmd_fingerprint_enroll(uint8_t id)
     fingerprint_error(p);
 }
 
-void cmd_fingerprint_get_id()
+int8_t cmd_fingerprint_get_id()
 {
     byte p = finger.getImage();
     fingerprint_error(p);
+    if (FINGERPRINT_OK != p)
+    {
+        return -1;
+    }
     // OK success!
 
     p = finger.image2Tz();
     fingerprint_error(p);
     if (FINGERPRINT_OK != p)
     {
-        return;
+        return -1;
     }
 
     // OK converted!
     p = finger.fingerSearch();
     fingerprint_error(p);
+    if (FINGERPRINT_OK != p)
+    {
+        return -1;
+    }
     // found a match!
-//    Serial.printf(F("Found ID %d with confidence %d\r\n"), finger.fingerID, finger.confidence);
+    Serial.print(F("Found ID "));
+    Serial.print(finger.fingerID);
+    Serial.print(F(" confidence "));
+    Serial.print(finger.confidence);
+    return finger.fingerID;
 }
 #endif // FINGERPRINT
-
-// Command commands_fingerprint[] = {
-// {'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter(); }},
-// {'C',F("Clear Fingerprint DB"), [](){ cmd_fingerprint_clear(); }},
-// {'e',F("Enroll new fingerprint to id (parameter)"), [](){ cmd_fingerprint_enroll(config.numericParam); }},
-// {'h',F("Help"), [](){ cmd_help(); }},
-// {'i',F("Init"), []() { cmd_fingerprint_init(); }},
-// {'l',F("LED Test"), []() { cmd_fingerprint_ledtest(); }},
-// {'r',F("Read Fingerprint"), []() { cmd_fingerprint_get_id(); }},
-// {'x',F("Return to main menu"), []() { command_set = commands_main; }},
-// {'&',F("Reset"), [](){ cmd_reset(); }}
-// };
 
 #ifdef EEPROM
 void cmd_keyboard_write()
@@ -452,23 +456,30 @@ void cmd_fingerprint_touched()
 #ifdef FINGERPRINT
     digitalWrite(PIN_FINGERPRINT_POWER, 1);
     delay(200);
-    cmd_fingerprint_get_id();
-    delay(500);
-    digitalWrite(PIN_FINGERPRINT_POWER, 0);
+    int8_t results = cmd_fingerprint_get_id();
+    Serial.print(F("cmd_fingerprint_get_id "));
+    Serial.println((int)results);
+    at.setTimeout([](){ digitalWrite(PIN_FINGERPRINT_POWER, 0); }, 500);
+    if (results > -1)
+    {
+        Serial.println(F("Run demo"));
+        cmd_oled_demo();
+    }
 #endif // FINGERPRINT
 }
 
-void cmd_oled_demo()
+void power_on()
 {
-#ifdef OLED
-    if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) 
-    {
-        Serial.println(F("SSD1306 allocation failed"));
-        return;
-    }
-    Serial.println(F("SSD1306 Init Ok"));
+    digitalWrite(PIN_FINGERPRINT_POWER, 0);
+    display.clearDisplay();
     display.display();
-#endif // OLED
+}
+
+void power_off()
+{
+    display.clearDisplay();
+    display.display();
+    digitalWrite(PIN_FINGERPRINT_POWER, 1); 
 }
 
 void handleCommand(byte command)
@@ -488,8 +499,10 @@ void handleCommand(byte command)
         case 'C': cmd_show_config(); break;
         case 'g': cmd_fingerprint_get_id(); break;
         case 'i': cmd_fingerprint_init(); break;
-        case 'p': digitalWrite(PIN_FINGERPRINT_POWER, 0); break;
-        case 'P': digitalWrite(PIN_FINGERPRINT_POWER, 1); break;
+        case 'p': power_off(); break;
+        case 'P': power_on(); break;
+            break;
+//        case 'r': oled_redisplay(); break;
         case 't': cmd_fingerprint_touched(); break;
         case 'T': Serial.println(finger.getTemplateCount()); break;
         case 'f': Serial.println(finger.fingerFastSearch()); break;
@@ -509,6 +522,7 @@ void handleCommand(byte command)
             Serial.println(F("o = poll"));
             Serial.println(F("p = sensor OFF"));
             Serial.println(F("P = sensor ON"));
+            Serial.println(F("r = redisplay"));
             Serial.println(F("s = i2c scanner"));
             Serial.println(F("t = template count"));
             Serial.println(F("f = fastsearch"));
@@ -527,65 +541,77 @@ void handleCommand(byte command)
     }
 }
 
-
-//    if (config.accumParameter == true)
-//    {
-//        accumulate_parameter(command);
-//        return;
-//    }
-//    for (Command * iter = command_set; iter->key != '&'; iter++)
-//    {
-//        if (iter->key == command)
-//        {
-//            iter->fun();
-//            return;
-//        }
-//    }
-//    if (command >= '0' & command <= '9')
-//    {
-//        config.numericParam *= 10;
-//        config.numericParam += command - '0';
-//    }
-// }
-
-
 void setup(void)
 {
     memset(&config, 0, sizeof(config));
     Serial.begin(115200);
 
-//    PCICR |= (1 << PCIE0);
-//    PCMSK0 |= (1 << PCINT6);
-
 #ifdef FINGERPRINT
-//    Serial1.setTX(PIN_FINGERPRINT_TX);
-//    Serial1.setRX(PIN_FINGERPRINT_RX);
     Serial1.begin(57600);
 #endif // FINGERPRINT
     pinMode(PIN_FINGERPRINT_POWER, OUTPUT);
-    digitalWrite(PIN_FINGERPRINT_POWER, 0);
-//    delay(100);
-//    cmd_fingerprint_init();
-//    delay(100);
-//    digitalWrite(PIN_FINGERPRINT_POWER, 1);
+    power_off();
+
     Wire1.setSDA(PIN_OLED_SDA);
     Wire1.setSCL(PIN_OLED_SCL);
     Wire1.begin();
     Wire.begin();
 
-
     pinMode(PIN_TOUCH, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(PIN_TOUCH), touched, RISING);
-//    attachInterrupt(digitalPinToInterrupt(FilmSensorPin8mm), isr1, RISING);
+
+//    at.setTimeout(click_timeout, 500);
+}
+
+// void click_timeout()
+// {
+//     at.setTimeout(click_timeout, 500);
+//     if (2 == config.numClicks) // double click
+//     {
+//         power_on();
+//         delay(300);
+//         cmd_fingerprint_init();
+//         cmd_fingerprint_get_id(); 
+//         at.setTimeout(power_off, 1000);
+//         config.numClicks = 0;
+//         return;
+//     }
+//     else if (1 == config.numClicks) // single click
+//     {
+//         Serial.print('S');
+//         config.numClicks = 0;
+//         return;
+//     }
+// }
+
+void handle_touched()
+{
+//    config.numClicks++;
+    power_on();
+    delay(300);
+    cmd_fingerprint_init();
+    int8_t results = cmd_fingerprint_get_id();
+    Serial.print(F("cmd_fingerprint_get_id "));
+    Serial.println((int)results);
+//    at.setTimeout([](){ digitalWrite(PIN_FINGERPRINT_POWER, 0); }, 500);
+    if (results > -1)
+    {
+        Serial.println(F("Run demo"));
+        cmd_oled_demo();
+        power_off();
+    }
+    else
+    {
+        power_off();
+    }
 }
 
 void loop(void)
 {
-//    Serial1.println(F("Hello"));
-//    Serial.println(F("Hello"));
+    at.handle();
     if (true == config.finger_touch)
     {
-        Serial.println("Touched");
+        handle_touched();
 //        cmd_fingerprint_touched();
 //#ifdef FINGERPRINT
 //        cmd_fingerprint_get_id();
