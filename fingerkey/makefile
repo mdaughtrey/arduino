@@ -16,6 +16,16 @@ DOCKERNAME=acli
 DOCKER=docker
 RBDIR=~/remotebuild/arduino/${PROJ}
 
+#ACLI_PROPERTIES=--build-property build.partitions=min_spiffs # --build-property upload.maximum_size=1966080
+#ACLI_DEFINES=--build-property compiler.cpp.extra_flags=-DFORMAT_SPIFFS_IF_FAILED=true
+ACLI_DEFINES=--build-property compiler.cpp.extra_flags=-DDEBUG_RP2040_PORT=Serial
+ACLI_PROPERTIES=--build-property upload.maximum_size=2027520
+ACLI_PROPERTIES+=--build-property build.flash_total=2097152
+ACLI_PROPERTIES+=--build-property build.flash_length=2027520
+ACLI_PROPERTIES+=--build-property build.eeprom_start=270528512
+ACLI_PROPERTIES+=--build-property build.fs_start=270462976
+ACLI_PROPERTIES+=--build-property build.fs_end=270528512
+
 all:
 	make b
 #ssh mattd@${DOCKERHOST}  ${DOCKER} run --rm -v ~/dev/personal-projects:/personal-projects 
@@ -24,15 +34,14 @@ br:
 	rsync -r --mkpath . mattd@${DOCKERHOST}:${RBDIR}
 	ssh mattd@${DOCKERHOST}  ${DOCKER} run --rm -v ${RBDIR}:/${PROJ}  \
 	--entrypoint /home/mattd/acli/bin/arduino-cli \
-		--name ${DOCKERNAME} ${DOCKERNAME}:latest compile /${PROJ}/${PROJ}.ino -b ${PLATFORM} --output-dir /${PROJ}
-	rsync mattd@${DOCKERHOST}:${RBDIR}/${PROJ}.ino.bin :${RBDIR}/${PROJ}.ino.elf :${RBDIR}/${PROJ}.ino.map :${RBDIR}/${PROJ}.ino.uf2 .
+		--name ${DOCKERNAME} ${DOCKERNAME}:latest compile /${PROJ}/${PROJ}.ino -b ${PLATFORM} --output-dir /${PROJ} rsync mattd@${DOCKERHOST}:${RBDIR}/${PROJ}.ino.bin :${RBDIR}/${PROJ}.ino.elf :${RBDIR}/${PROJ}.ino.map :${RBDIR}/${PROJ}.ino.uf2 .
 #	ssh mattd@pop-os  ${DOCKER} run --rm -v ~/personal-projects:/personal-projects \
 #        --entrypoint /home/mattd/acli/bin/arduino-cli \
 #		--name ${DOCKERNAME} ${DOCKERNAME}:latest compile --clean ${PROJDIR}/${PROJ}.ino -b ${PLATFORM} --output-dir  ${PROJDIR}
 	
 # Build
 b:
-	${ACLI} compile --build-path buildfiles  ${PROJ}.ino -b ${PLATFORM} --output-dir .
+	${ACLI} compile --build-path buildfiles ${ACLI_PROPERTIES} ${ACLI_DEFINES} ${PROJ}.ino -b ${PLATFORM} --output-dir . 2>&1 | tee build.log
 
 # Upload remote
 #ur: 

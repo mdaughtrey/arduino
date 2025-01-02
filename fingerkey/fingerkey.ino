@@ -18,6 +18,13 @@
 #endif // FINGERPRINT
 #include <AsyncTimer.h>
 
+#define KV
+#ifdef KV
+#include "keyvalue.h"
+//#include "kv_store.h"
+KeyValue kv;
+#endif // KV
+
 AsyncTimer at;
 
 
@@ -29,7 +36,7 @@ AsyncTimer at;
 // 5 Black tx <-> controller tx
 // 6 Red gnd
 
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_WIDTH 128 // byte display width, in pixels
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels
 
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
@@ -43,7 +50,6 @@ AsyncTimer at;
 #ifdef OLED
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire1, OLED_RESET);
 #endif // OLED
-
 
 const uint8_t PIN_TOUCH = 2;
 const uint8_t PIN_FINGERPRINT_RX = 5;
@@ -61,9 +67,23 @@ typedef struct
     void (*fun)();
 }Command;
 
+typedef enum
+{
+    INPUT_COMMAND,
+    INPUT_KEY,
+    INPUT_VALUE,
+    INPUT_READY
+} InputState;
+
+//#define PARAM_LEN 32
 struct {
-//    byte param[PARAM_LEN];
+    InputState inputState;
+    String param1;
+    String param2;
+//    char param1[PARAM_LEN];
+//    char param2[PARAM_LEN];
 //    byte paramIndex;
+    char storedCommand;
     int32_t numericParam;
     bool finger_touch;
 //    bool accumParameter;
@@ -75,17 +95,12 @@ struct {
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial1);
 #endif // FINGERPRINT
 
-void cmd_help();
-void cmd_reset(void);
 void cmd_clear_numeric_parameter(void);
-void cmd_test_key(void);
-void cmd_show_config(void);
 void setup(void);
 
 #ifdef FINGERPRINT
 void fingerprint_error(int8_t);
 void cmd_fingerprint_init();
-void cmd_fingerprint_menu(void);
 void cmd_fingerprint_ledtest(void);
 void cmd_fingerprint_ledtest2(void);
 void cmd_fingerprint_delete(int32_t);
@@ -136,43 +151,6 @@ void cmd_oled_demo()
     display.clearDisplay();
     display.display();
 }
-
-void cmd_show_config(void)
-{
-//    Serial.printf(F("parameter %d\r\n"), config.numericParam);
-#ifdef FINGER
-    Serial.println(F("Reading sensor parameters"));
-    finger.getParameters();
-    Serial.printf(F("Status: 0x%02x "), finger.status_reg);
-    Serial.printf(F("Sys ID: 0x%02x "), finger.system_id);
-    Serial.printf(F("Capacity: %u "), finger.capacity);
-    Serial.printf(F("Security level: %d "), finger.security_level);
-    Serial.printf(F("Device address: 0x%02x "), finger.device_addr);
-    Serial.printf(F("Packet len: %u "), finger.packet_len);
-    Serial.printf(F("Baud rate: %u\r\n"), finger.baud_rate);
-    Serial.printf(F("Template Count %d\r\n"), finger.getTemplateCount());
-#endif // FINGER
-    Serial.println(F("Reading sensor parameters"));
-//    Preferences key_store;
-//    key_store.begin(KEYSTORE_NAME, KEYSTORE_RO);
-//    Serial.printf(F("Text Parameter Index %u\r\n"), config.paramIndex);
-//    Serial.printf(F("Text Parameter %s\r\n"), config.param);
-//    Serial.printf(F("Numeric Parameter %d\r\n"), config.numericParam);
-//    for (byte ii = 0; ii < NUM_KEYS; ii++)
-//    {
-//        char buffer[KEYSTORE_MACRO_MAXLEN * 4];
-//        snprintf(buffer, KEYSTORE_LABEL_MAXLEN, "disp%02xlabel", ii);
-//        Serial.printf(F("%s: %s\r\n"), buffer, key_store.getString(buffer));
-//        snprintf(buffer, KEYSTORE_MACRO_MAXLEN, "disp%02xmacro", ii);
-//        Serial.printf(F("%s: %s\r\n"), buffer, key_store.getString(buffer));
-//    }
-//    key_store.end();
-}
-
-void cmd_reset(void)
-{
-}
-
 
 void cmd_clear_numeric_parameter(void)
 {
@@ -253,16 +231,6 @@ void cmd_fingerprint_init()
             return;
         }
       }
-
-//  Serial.println(F("Reading sensor parameters"));
-//  finger.getParameters();
-//  Serial.print(F("Status: 0x")); Serial.println(finger.status_reg, HEX);
-//  Serial.print(F("Sys ID: 0x")); Serial.println(finger.system_id, HEX);
-//  Serial.print(F("Capacity: ")); Serial.println(finger.capacity);
-//  Serial.print(F("Security level: ")); Serial.println(finger.security_level);
-//  Serial.print(F("Device address: ")); Serial.println(finger.device_addr, HEX);
-//  Serial.print(F("Packet len: ")); Serial.println(finger.packet_len);
-//  Serial.print(F("Baud rate: ")); Serial.println(finger.baud_rate);
 }
 
 void cmd_fingerprint_ledtest(void)
@@ -442,32 +410,6 @@ void cmd_led_demo()
 
 #endif // FINGERPRINT
 
-void cmd_poll()
-{
-    for (uint8_t ii = 0; ii < 20; ii++)
-    {
-        Serial.println(digitalRead(PIN_TOUCH));
-        delay(500);
-    }
-}
-
-void cmd_fingerprint_touched()
-{
-#ifdef FINGERPRINT
-    digitalWrite(PIN_FINGERPRINT_POWER, 1);
-    delay(200);
-    int8_t results = cmd_fingerprint_get_id();
-    Serial.print(F("cmd_fingerprint_get_id "));
-    Serial.println((int)results);
-    at.setTimeout([](){ digitalWrite(PIN_FINGERPRINT_POWER, 0); }, 500);
-    if (results > -1)
-    {
-        Serial.println(F("Run demo"));
-        cmd_oled_demo();
-    }
-#endif // FINGERPRINT
-}
-
 void power_on()
 {
     digitalWrite(PIN_FINGERPRINT_POWER, 0);
@@ -482,62 +424,117 @@ void power_off()
     digitalWrite(PIN_FINGERPRINT_POWER, 1); 
 }
 
-void handleCommand(byte command)
+bool accum_parameter(char command)
 {
+    Serial.print(command);
+    if ('\r' == command)
+    {
+        return true;
+    }
+    config.param1 += command;
+    return false;
+}
+
+void handle_input(char command)
+{
+    switch (config.inputState)
+    {
+    case INPUT_KEY:
+        if (true == accum_parameter(command))
+        {
+            config.inputState = INPUT_VALUE;
+//            Serial.printf("Key is %s\r\n", config.param1.c_str());
+            config.param2 = config.param1;
+            config.param1 = "";
+            Serial.print(F("\r\nValue: (Enter to finish): "));
+        }
+        break;
+    case INPUT_VALUE:
+        if (true == accum_parameter(command))
+        {
+//            Serial.printf("Value is %s\r\n", config.param1.c_str());
+            Serial.println("");
+            config.inputState = INPUT_READY;
+//            config.paramIndex = 0;
+            handle_command(config.storedCommand);
+        }
+        break;
+
+    case INPUT_COMMAND:
+        handle_command(command);
+        break;
+    }
+}
+
+void handle_command(byte command)
+{
+    String key;
+    String value;
+    byte count;
+
     switch (command)
     {
-//        case 'i': 
-//            i2c_scanner();
-//            break;
-        case 'o': cmd_poll(); break;
 #ifdef OLED
         case 'd': cmd_oled_demo(); break;
 #endif // OLEd
 #ifdef FINGERPRINT
         case 'c': fingerprint_error(finger.createModel()); break;
         case 'e': cmd_fingerprint_enroll(0); break;
-        case 'C': cmd_show_config(); break;
         case 'g': cmd_fingerprint_get_id(); break;
         case 'i': cmd_fingerprint_init(); break;
-        case 'p': power_off(); break;
-        case 'P': power_on(); break;
-            break;
-//        case 'r': oled_redisplay(); break;
-        case 't': cmd_fingerprint_touched(); break;
         case 'T': Serial.println(finger.getTemplateCount()); break;
-        case 'f': Serial.println(finger.fingerFastSearch()); break;
-        
-//        case 'L':
-//            cmd_fingerprint_ledtest();
-//            break;
 #endif // FINGERPRINT
-        case 's': i2c_scanner(&Wire1); break;
+//        case 's': i2c_scanner(&Wire1); break;
+#ifdef KV
+        case 'f':
+            kv.format();
+            break;
+        case 'k': 
+            count = 0;
+            if (!kv.first(key, value))
+            {
+                break;
+            }
+            Serial.printf("%d: %s -> %s\r\n", count++, key.c_str(), value.c_str());
+            while (kv.next(key, value))
+            {
+                Serial.printf("%d: %s -> %s\r\n", count++, key.c_str(), value.c_str());
+            }
+            Serial.println("Done");
+            break;
+
+        case 'l': kv.load(); break;
+        case 'p': 
+            if (INPUT_READY == config.inputState)
+            {
+                kv.put(config.param2, config.param1);
+                config.inputState = INPUT_COMMAND;
+                return;
+            }
+            Serial.print(F("\r\nKey: (Enter to finish): "));
+            config.param1 = "";
+            config.param2 = "";
+            config.inputState = INPUT_KEY;
+//            config.paramIndex = 0;
+            config.storedCommand = command;
+            break;
+
+        case 's':
+            kv.save();
+            break;
+
+#endif // KV
         default:
             Serial.println(F("c = create model"));
-            Serial.println(F("d = OLED demo"));
             Serial.println(F("e = enroll"));
-            Serial.println(F("C = config"));
             Serial.println(F("g = get"));
             Serial.println(F("i = init"));
-            Serial.println(F("o = poll"));
-            Serial.println(F("p = sensor OFF"));
-            Serial.println(F("P = sensor ON"));
-            Serial.println(F("r = redisplay"));
-            Serial.println(F("s = i2c scanner"));
+            Serial.println(F("k = list keys"));
+            Serial.println(F("l = load KV"));
+            Serial.println(F("p = put key/value"));
+            Serial.println(F("s = save KV"));
             Serial.println(F("t = template count"));
-            Serial.println(F("f = fastsearch"));
             break;
-//        case 'w': 
-//            cmd_keyboard_write();
-//            break;
-//
-//        case 'r':
-//            cmd_record_password();
-//            break;
-//
-//        default:
-//            Serial.println("iflwr");
-//            break;
     }
 }
 
@@ -559,41 +556,14 @@ void setup(void)
 
     pinMode(PIN_TOUCH, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(PIN_TOUCH), touched, RISING);
-
-//    at.setTimeout(click_timeout, 500);
 }
-
-// void click_timeout()
-// {
-//     at.setTimeout(click_timeout, 500);
-//     if (2 == config.numClicks) // double click
-//     {
-//         power_on();
-//         delay(300);
-//         cmd_fingerprint_init();
-//         cmd_fingerprint_get_id(); 
-//         at.setTimeout(power_off, 1000);
-//         config.numClicks = 0;
-//         return;
-//     }
-//     else if (1 == config.numClicks) // single click
-//     {
-//         Serial.print('S');
-//         config.numClicks = 0;
-//         return;
-//     }
-// }
 
 void handle_touched()
 {
-//    config.numClicks++;
     power_on();
     delay(300);
     cmd_fingerprint_init();
     int8_t results = cmd_fingerprint_get_id();
-    Serial.print(F("cmd_fingerprint_get_id "));
-    Serial.println((int)results);
-//    at.setTimeout([](){ digitalWrite(PIN_FINGERPRINT_POWER, 0); }, 500);
     if (results > -1)
     {
         Serial.println(F("Run demo"));
@@ -612,20 +582,11 @@ void loop(void)
     if (true == config.finger_touch)
     {
         handle_touched();
-//        cmd_fingerprint_touched();
-//#ifdef FINGERPRINT
-//        cmd_fingerprint_get_id();
-//#endif // FINGERPRINT
-//        digitalWrite(PIN_FINGERPRINT_POWER, 0);
-//        delay(100);
-//        Serial.println(finger.fingerFastSearch());
-//        digitalWrite(PIN_FINGERPRINT_POWER, 1);
         config.finger_touch = false;
     }
     if (Serial.available())
     {
-        handleCommand(Serial.read());
-//        handleCommand(Serial.read());
+        handle_input(Serial.read());
     }
 }
 
