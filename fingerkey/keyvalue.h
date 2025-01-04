@@ -1,36 +1,36 @@
 #pragma once
 
 #include <Arduino.h>
+#include <string>
 
-// Custom Key-Value Pair Structure
-struct KeyValuePair {
-  String key;
-  String value;
+
+struct Node
+{
+    String key;
+    String value;
+    Node * next;
+    Node * prev;
 };
 
-class KeyValue
+class KeyValue 
 {
-private:
-  struct Node {
-    KeyValuePair data;
-    Node* next;
-    Node(KeyValuePair data) : data(data), next(nullptr) {}
-  };
-  Node* head;
-  Node* iter;
-
+protected:
+    Node * _head;
+    Node * getNode(int8_t);
 public:
-  KeyValue();
-
-  void insert(String &key, String &value);
-  void put(String &key, String &value);
-  String get(String &key);
-  bool first(String & , String &);
-  bool next(String & , String &);
-  void load();
-  void save();
-  void format();
-  void clear();
-  void remove(String &key);
-  void remove(byte index);
+    KeyValue();
+    int8_t count();
+    void put(String, String);
+    void put(const char *, const char *);
+    String get(String);
+    String get(const char *);
+    int8_t getIndexOf(const char *);
+    String key(uint8_t);
+    String value(uint8_t);
+    void remove(const char *);
+    void remove(String &);
+    void removeIndex(int8_t);
+    void clear();
+    void load();
+    void save();
 };

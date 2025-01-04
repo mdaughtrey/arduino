@@ -41,7 +41,7 @@ br:
 	
 # Build
 b:
-	${ACLI} compile --build-path buildfiles ${ACLI_PROPERTIES} ${ACLI_DEFINES} ${PROJ}.ino -b ${PLATFORM} --output-dir . 2>&1 | tee build.log
+	${ACLI} compile ${ACLI_PROPERTIES} ${ACLI_DEFINES} ${PROJ}.ino -b ${PLATFORM} --output-dir . 2>&1 | tee build.log
 
 # Upload remote
 #ur: 

@@ -471,6 +471,7 @@ void handle_command(byte command)
     String key;
     String value;
     byte count;
+    Node * node;
 
     switch (command)
     {
@@ -486,19 +487,11 @@ void handle_command(byte command)
 #endif // FINGERPRINT
 //        case 's': i2c_scanner(&Wire1); break;
 #ifdef KV
-        case 'f':
-            kv.format();
-            break;
         case 'k': 
-            count = 0;
-            if (!kv.first(key, value))
+            for (count = 0; count < kv.count(); count++)
             {
-                break;
-            }
-            Serial.printf("%d: %s -> %s\r\n", count++, key.c_str(), value.c_str());
-            while (kv.next(key, value))
-            {
-                Serial.printf("%d: %s -> %s\r\n", count++, key.c_str(), value.c_str());
+                Serial.printf("%d: %s -> %s\r\n",
+                     count, kv.key(count), kv.value(count));
             }
             Serial.println("Done");
             break;
@@ -507,7 +500,7 @@ void handle_command(byte command)
         case 'p': 
             if (INPUT_READY == config.inputState)
             {
-                kv.put(config.param2, config.param1);
+                kv.put(config.param2.c_str(), config.param1.c_str());
                 config.inputState = INPUT_COMMAND;
                 return;
             }
