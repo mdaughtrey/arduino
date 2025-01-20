@@ -4,19 +4,14 @@
 #include "keyvalue.h"
 #define KV_FILENAME "kv.json"
 
-KeyValue::KeyValue() : _head(nullptr)
+KeyValue::KeyValue() : _head(nullptr), empty(""), _count(0)
 {
-    LittleFS.begin();
 }
 
 
 int8_t KeyValue::count()
 {
-    int8_t count;
-    Node * iter = _head;
-    for (; iter != nullptr; iter = iter->next, count++)
-        ;
-    return count;
+    return _count;
 }
 
 void KeyValue::put(String key, String value)
@@ -32,6 +27,7 @@ void KeyValue::put(const char * key, const char * value)
     if (nullptr == _head)
     {
         _head = new Node{String(key), String(value), nullptr, prev};
+        _count++;
         return;
     }
     for (; iter != nullptr; prev = iter, iter = iter->next)
@@ -45,8 +41,10 @@ void KeyValue::put(const char * key, const char * value)
     if (iter == nullptr)
     {
         prev->next = new Node{String(key), String(value), nullptr, prev};
+        _count++;
     }
 }
+
 
 String KeyValue::get(String key)
 {
@@ -83,14 +81,15 @@ int8_t KeyValue::getIndexOf(const char * key)
 Node * KeyValue::getNode(int8_t index)
 {
     Node * iter = _head;
-    uint8_t count = 0;
-    for (; (iter != nullptr) && (count < index); count++, iter = iter->next)
+//    Serial.printf("getNode index %d\r\n", index);
+    for (; (iter != nullptr) && index; iter=iter->next, index--)
+        ;
+    if (nullptr != iter)
     {
-        if (count == index)
-        {
-            return iter;
-        }
+//        Serial.printf("matched, returning %08x\r\n", iter);
+        return iter;
     }
+//    Serial.println("getNode no match, returning null");
     return nullptr;
 }
 
@@ -116,6 +115,7 @@ void KeyValue::removeIndex(int8_t index)
         Node * tmp(_head);
         _head = _head->next;
         delete tmp;
+        _count--;
         return;
     }
     for (; (iter != nullptr) && index; iter=iter->next, index--)
@@ -128,35 +128,36 @@ void KeyValue::removeIndex(int8_t index)
         }
         iter->prev->next = iter->next;
         delete iter;
+        _count--;
     }
 }
 
 void KeyValue::clear()
 {
-    while (count())
+    while (_count)
     {
         removeIndex(0);
     }
 }
 
-String KeyValue::key(uint8_t index)
+String & KeyValue::key(uint8_t index)
 {
     Node * node = getNode(index);
-    if (nullptr == node)
+    if (nullptr != node)
     {
         return node->key;
     }
-    return String("");
+    return empty;
 }
 
-String KeyValue::value(uint8_t index)
+String & KeyValue::value(uint8_t index)
 {
     Node * node = getNode(index);
-    if (nullptr == node)
+    if (nullptr != node)
     {
         return node->value;
     }
-    return String("");
+    return empty;
 }
 
 void KeyValue::load()
@@ -180,7 +181,6 @@ void KeyValue::load()
         value.replace("==", "=");
         key.trim();
         value.trim();
-        Serial.printf("Load: Key [%s] Value [%s]\r\n", key, value);
         put(key, value);
     }
     file.close();
@@ -188,6 +188,7 @@ void KeyValue::load()
 
 void KeyValue::save()
 {
+    LittleFS.begin();
     File file = LittleFS.open(KV_FILENAME, "w");
     if (!file)
     {
@@ -204,9 +205,20 @@ void KeyValue::save()
         value.replace("=", "==");
         
         String line(key + " = " + value + "\r\n");
-        Serial.printf("Save: Writing %s\r\n", line);
         file.write(line.c_str(), line.length());
     }
     file.close();
+}
+
+void KeyValue::dump()
+{
+    Node * iter = _head;
+    while (nullptr != iter)
+    {
+        Serial.printf("node %08x prev %08x next %08x key %s value %s\r\n",
+                iter, iter->prev, iter->next, iter->key.c_str(), iter->value.c_str());
+        iter = iter->next;
+    }
+    Serial.println("Done");
 }
 

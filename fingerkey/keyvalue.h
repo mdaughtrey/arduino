@@ -17,6 +17,8 @@ class KeyValue
 protected:
     Node * _head;
     Node * getNode(int8_t);
+    String empty;
+    int8_t _count;
 public:
     KeyValue();
     int8_t count();
@@ -25,12 +27,13 @@ public:
     String get(String);
     String get(const char *);
     int8_t getIndexOf(const char *);
-    String key(uint8_t);
-    String value(uint8_t);
+    String & key(uint8_t);
+    String & value(uint8_t);
     void remove(const char *);
     void remove(String &);
     void removeIndex(int8_t);
     void clear();
     void load();
     void save();
+    void dump();
 };
