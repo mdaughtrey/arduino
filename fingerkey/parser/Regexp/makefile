@@ -8,7 +8,7 @@ EXECUTABLE = regexp
 CXX = g++
 
 # Compiler flags
-CXXFLAGS = -Wall -std=c++11 # You can adjust the standard as needed
+CXXFLAGS = -Wall -std=c++11 -g -O0 # You can adjust the standard as needed
 
 # Rule to build the executable
 $(EXECUTABLE): $(OBJECTS)
@@ -21,3 +21,9 @@ $(EXECUTABLE): $(OBJECTS)
 # Phony target to clean up object files and executable
 clean:
 	rm -f $(OBJECTS) $(EXECUTABLE)
+
+r:
+	./$(EXECUTABLE) testfile.txt
+
+d:
+	gdbgui --args ../$(EXECUTABLE) testfile.txt

@@ -22,7 +22,7 @@ int main(int argc, char ** argv)
     string line;
     while (getline(infile, line))
     {
-        cout << line << endl;
+        cout << "Input: " << line << endl;
     }
     infile.close();
     cout << "Done" << endl;
