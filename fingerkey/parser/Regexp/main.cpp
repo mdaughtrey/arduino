@@ -23,6 +23,7 @@ int main(int argc, char ** argv)
     while (getline(infile, line))
     {
         cout << "Input: " << line << endl;
+        Parser pp(line);
     }
     infile.close();
     cout << "Done" << endl;

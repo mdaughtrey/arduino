@@ -1,11 +1,11 @@
+<Alt-a>
 abc
 ABC
 c<<de
 fgh>ab
-<alt-a>
-<ctrl-b>
-<ctrl-alt-c>
-<ctrl-alt-D>
+<Ctrl-b>
+<Ctrl-Alt-c>
+<Ctrl-Alt-D>
 <sleep 1000>
 <tab>
 <cr>

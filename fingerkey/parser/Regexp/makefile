@@ -1,5 +1,5 @@
 # Object files
-OBJECTS = main.o src/Regexp.o
+OBJECTS = main.o src/Regexp.o parser.o
 
 # Executable file
 EXECUTABLE = regexp
