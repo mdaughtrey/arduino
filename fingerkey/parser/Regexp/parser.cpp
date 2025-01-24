@@ -2,67 +2,84 @@
 #include <vector>
 #include <utility>
 #include <iterator>
+#include <iostream>
+#include <cstring>
 
 #include "parser.h"
 #include "src/Regexp.h"
 
+using namespace std;
+
 Parser::Parser(string & toparse, bool parseonly)
 {
     _index = 0;
-    _parseonly = parseonly;
+    parseonly = parseonly;
 //    MatchState ms(const_cast<char *>(toparse.c_str()));
-    _parseloop(toparse);
+    parseloop(toparse);
 }
 
 //int Parser::parseloop( string & toparse, int index)
-int Parser::_parseloop(string & toparse)
+int Parser::parseloop(string & toparse)
 {
     int index = 0;
     MatchState ms(const_cast<char *>(toparse.c_str()));
     while (index < static_cast<int>(toparse.length()) && !_error_state)
     {
-        index += _meta(toparse);
-        index += _printable(toparse);
-//        index += _non_printable(ms, toparse, index);
+        index += meta(toparse);
+        index += special(toparse);
+        index += printable(toparse);
+//        index += _nonprintable(ms, toparse, index);
     }
-    return 0;
+    return index;
 }
 
-int Parser::_meta(string & toparse)
+int Parser::meta(string & toparse)
 {
-    char match;
+    char match = REGEXP_MATCHED;
     char buffer[16];
+    string matchon;
 
-    if ('<' != toparse[0])
-    {
-        return 0;
-    }
+//    if ('<' != toparse[0])
+//    {
+//        return 0;
+//    }
 
     MatchState ms(const_cast<char *>(toparse.c_str()));
-    int index = 1;
-    do
+    int index = 0;
+    int length = 0;
+    if (ms.Match("<(.*)>"))
     {
-        match = ms.Match("Alt%-(.-)>", index);
+        length = 2;
+        ms.Target(ms.GetCapture(buffer, 0));
+    }
+    //while (index < static_cast<int>(toparse.length()))
+    while (REGEXP_MATCHED == match)
+    {
+        _inmeta = false;
+        matchon = "alt%-(.*)";
+        match = ms.Match(matchon.c_str(), index);
         if (REGEXP_MATCHED == match)
         {
-            _l_alt(true);
-            index += 5;
+            l_alt(true);
+            _inmeta = true;
+            index += matchon.length();
             ms.GetCapture(buffer, 0);
             string ss(buffer);
-            index += _parseloop(ss);
+            index += parseloop(ss);
             continue;
         }
-        match = ms.Match("L-Alt%-([^>]+)", index);
+        matchon = "lalt%-(.*)";
+        match = ms.Match(matchon.c_str(), index);
         if (REGEXP_MATCHED == match)
         {
-            _l_alt(true);
-            index += 6;
+            l_alt(true);
+            index += matchon.length();
             continue;
         }
-        match = ms.Match("R-Alt%-([^>]+)", index);
+        match = ms.Match("ralt%-([^>]+)", index);
         if (REGEXP_MATCHED == match)
         {
-            _r_alt(true);
+            r_alt(true);
             index += 6;
             continue;
         }
@@ -70,21 +87,21 @@ int Parser::_meta(string & toparse)
         match = ms.Match("Ctrl%-([^>]+)", index);
         if (REGEXP_MATCHED == match)
         {
-            _l_ctrl(true);
+            l_ctrl(true);
             index += 5;
             continue;
         }
-        match = ms.Match("L-Ctrl%-([^>]+)", index);
+        match = ms.Match("L%-Ctrl%-([^>]+)", index);
         if (REGEXP_MATCHED == match)
         {
-            _l_ctrl(true);
+            l_ctrl(true);
             index += 7;
             continue;
         }
-        match = ms.Match("R-Ctrl%-([^>]+)", index);
+        match = ms.Match("R%-Ctrl%-([^>]+)", index);
         if (REGEXP_MATCHED == match)
         {
-            _r_ctrl(true);
+            r_ctrl(true);
             index += 7;
             continue;
         }
@@ -92,31 +109,141 @@ int Parser::_meta(string & toparse)
         match = ms.Match("Shift%-([^>]+)", index);
         if (REGEXP_MATCHED == match)
         {
-            _l_shift(true);
+            l_shift(true);
             index += 6;
             continue;
         }
-        match = ms.Match("<-Shift%-([^>]+)", index);
+        match = ms.Match("<L%-Shift%-([^>]+)", index);
         if (REGEXP_MATCHED == match)
         {
-            _l_shift(true);
+            l_shift(true);
             index += 8;
             continue;
         }
-        match = ms.Match("R-Shift%-([^>]+)", index);
+        match = ms.Match("R%-Shift%-([^>]+)", index);
         if (REGEXP_MATCHED == match)
         {
-            _r_shift(true);
+            r_shift(true);
             index += 8;
             continue;
         }
 
-    } while (REGEXP_NOMATCH != match);
+    } //  while (index < toparse.length());
+    //} while (REGEXP_NOMATCH != match);
 
     return index;
 }
 
-int Parser::_printable(string & toparse)
+int Parser::special(string & toparse)
+{
+    int index = 0;
+    char buffer[16];
+    if ('<' != toparse[0])
+    {
+        return 0;
+    }
+
+    MatchState ms(const_cast<char *>(toparse.c_str()));
+    if (!ms.Match("<(.*)>", 0))
+    {
+        return 0;
+    }
+    ms.Target(ms.GetCapture(buffer, 0));
+
+    if (ms.Match("<sleep (%d)", 0))
+    {
+        char buffer[16];
+        index += strlen(ms.GetMatch(buffer));
+    }
+    if (ms.Match("tab", 0))
+    {
+        index += 5;
+    }
+    if (ms.Match("cr", 0))
+    {
+        index += 4;
+    }
+    if (ms.Match("up", 0))
+    {
+        index += 4;
+    }
+    if (ms.Match("left", 0))
+    {
+        index += 6;
+    }
+    if (ms.Match("down", 0))
+    {
+        index += 6;
+    }
+    if (ms.Match("right", 0))
+    {
+        index += 7;
+    }
+    if (ms.Match("back", 0))
+    {
+        index += 6;
+    }
+    if (ms.Match("del", 0))
+    {
+        index += 5;
+    }
+    if (ms.Match("esc", 0))
+    {
+        index += 5;
+    }
+    if (ms.Match("ins", 0))
+    {
+        index += 5;
+    }
+    if (ms.Match("home", 0))
+    {
+        index += 6;
+    }
+    if (ms.Match("end", 0))
+    {
+        index += 5;
+    }
+    if (ms.Match("pgup", 0))
+    {
+        index += 6;
+    }
+    if (ms.Match("pgdn", 0))
+    {
+        index += 6;
+    }
+    if (ms.Match("pause", 0))
+    {
+        index += 7;
+    }
+    if (ms.Match("scrl-lock", 0))
+    {
+        index += 11;
+    }
+    if (ms.Match("prtscr", 0))
+    {
+        index += 8;
+    }
+    if (ms.Match("capslock", 0))
+    {
+        index += 10;
+    }
+    if (ms.Match("win", 0))
+    {
+        index += 5;
+    }
+    if (ms.Match("fn", 0))
+    {
+        index += 4;
+    }
+    if (ms.Match("f(%d)", 0))
+    {
+        char buffer[16];
+        index += strlen(ms.GetMatch(buffer));
+    }
+    return index;
+}
+
+int Parser::printable(string & toparse)
 {
     MatchState ms(const_cast<char *>(toparse.c_str()));
     char matched[16];
@@ -128,18 +255,55 @@ int Parser::_printable(string & toparse)
     // TODO escaped <
     ms.GetMatch(matched);
     int length = 0;
-    for (char * ptr = matched; *ptr, length++; ptr++)
+    for (char * ptr = matched; *ptr; length++, ptr++)
     {
-        _onekey(*ptr);
+        onekey(*ptr);
     }
     return length;
 }
 
-// Parser::_non_printable( string & toparse, int index)
+// Parser::_nonprintable( string & toparse, int index)
 // {
 //     return 0;
 // }
 
-void Parser::_onekey(char ch)
+void Parser::onekey(char ch)
 {
+    cout << "Onekey: " << ch << endl;
+}
+
+
+void Parser::l_alt(bool b)
+{
+    cout << "l_alt " << b << endl;
+}
+
+void Parser::r_alt(bool b)
+{
+    cout << "r_alt " << b << endl;
+}
+
+void Parser::l_ctrl(bool b)
+{
+    cout << "l_ctrl " << b << endl;
+}
+
+void Parser::r_ctrl(bool b)
+{
+    cout << "r_ctrl " << b << endl;
+}
+
+void Parser::l_shift(bool b)
+{
+    cout << "l_shift " << b << endl;
+}
+
+void Parser::r_shift(bool b)
+{
+    cout << "r_shift " << b << endl;
+}
+
+void Parser::set_meta(bool b)
+{
+    cout << "set_meta " << b << endl;
 }

@@ -1,3 +1,5 @@
+TAG=parser
+DOCKER=docker
 # Object files
 OBJECTS = main.o src/Regexp.o parser.o
 
@@ -27,3 +29,19 @@ r:
 
 d:
 	gdbgui --args ../$(EXECUTABLE) testfile.txt
+
+dr:
+	${DOCKER} run --rm -h ${TAG} -p 5000:5000 --name ${TAG} -it  -v ~/projects:/projects \
+	${TAG}:latest  /bin/bash
+
+
+attach:
+	${DOCKER} attach ${TAG}
+
+stop:
+	${DOCKER} stop ${TAG}
+	${DOCKER} rm ${TAG}
+#	${DOCKER} stop `${DOCKER} ps -a | grep ${TAG}:latest | grep -v Exited | cut -d' ' -f1`
+
+db:
+	${DOCKER} build -f ${TAG}.Dockerfile . --tag=${TAG}

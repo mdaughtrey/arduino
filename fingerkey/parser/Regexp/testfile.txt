@@ -1,6 +1,15 @@
-<Alt-a>
 abc
 ABC
+#$%
+<<>>
+<tab>
+<alt-a>
+<ctrl-b>
+<ctrl-alt-c>
+<ctrl-alt-tab>
+
+
+
 c<<de
 fgh>ab
 <Ctrl-b>
