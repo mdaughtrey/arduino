@@ -44,6 +44,4 @@ stop:
 #	${DOCKER} stop `${DOCKER} ps -a | grep ${TAG}:latest | grep -v Exited | cut -d' ' -f1`
 
 db:
-	cp ~/.tmux.conf tmux.conf
 	${DOCKER} build -f ${TAG}.Dockerfile . --tag=${TAG}
-	rm tmux.conf
