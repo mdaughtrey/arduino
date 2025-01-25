@@ -1,11 +1,12 @@
-abc
+<abc tab l_alt a ^l_alt ABC
+
 ABC
 #$%
 <<>>
 <tab>
-<alt-a>
-<ctrl-b>
-<ctrl-alt-c>
+alt a ^alt
+ctrl b ^ctrl
+ctrl alt-l ^ctrl ^alt
 <ctrl-alt-tab>
 
 

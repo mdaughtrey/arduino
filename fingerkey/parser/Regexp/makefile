@@ -28,10 +28,10 @@ r:
 	./$(EXECUTABLE) testfile.txt
 
 d:
-	gdbgui --args ../$(EXECUTABLE) testfile.txt
+	gdbgui --remote --args ./$(EXECUTABLE) testfile.txt
 
 dr:
-	${DOCKER} run --rm -h ${TAG} -p 5000:5000 --name ${TAG} -it  -v ~/projects:/projects \
+	${DOCKER} run --rm -h ${TAG} -p 5000:5000 -p 80:80 --name ${TAG} -it  -v ~/projects:/projects \
 		--workdir /projects/arduino/fingerkey/parser/Regexp ${TAG}:latest  /bin/bash
 
 
