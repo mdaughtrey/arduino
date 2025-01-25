@@ -5,14 +5,15 @@
 #include <Wire.h>
 #include "hardware/watchdog.h"
 #include <ansi.h>
-#include "line_editor.h"
+//#include "line_editor.h"
+#include "parser.h"
 #define OLED
 #ifdef OLED
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Fonts/FreeSans12pt7b.h>
 #endif // OLED
-#include <Keyboard.h>
+//#include <Keyboard.h>
 #include <Mouse.h>
 #define FINGERPRINT
 #ifdef FINGERPRINT
@@ -25,6 +26,8 @@
 #include "keyvalue.h"
 KeyValue kv;
 #endif // KV
+
+#include <string>
 
 AsyncTimer at;
 ANSI ansi(&Serial);
@@ -442,6 +445,29 @@ void handle_kv_delete(byte command)
     config.storedCommand = command;
 }
 
+void handle_send_keys(byte command)
+{
+    if (INPUT_READY == config.inputState)
+    {
+        Serial.println("handle_send_keys");
+        config.accum_numbers = false;
+        int index = config.param1.toInt();
+        if (index < kv.count())
+        {
+            std::string buffer(kv.value(config.param1.toInt()).c_str());
+            Parser parser(buffer);
+        }
+        config.inputState = INPUT_COMMAND;
+        return;
+    }
+    Serial.print(F("\r\n# to send: (Enter to finish): "));
+    config.param1 = "";
+    config.param2 = "";
+    config.inputState = INPUT_VALUE;
+    config.accum_numbers = true;
+    config.storedCommand = command;
+}
+
 void jiggle0()
 {
     Serial.println(F("jiggle0"));
@@ -481,6 +507,10 @@ void handle_command(byte command)
     {
         case 'a': power_on(); break;
         case 'A': power_off(); break;
+        case 'c': 
+            config.param1 = "";
+            config.param2 = "";
+            break;
 #ifdef FINGERPRINT
         case 'd': handle_kv_delete(command); break;
         case 'e': cmd_fingerprint_enroll(0); break;
@@ -514,20 +544,34 @@ void handle_command(byte command)
             config.storedCommand = command;
             break;
 
-        case 'r': while (1); break;
+ //       case 'r': 
+ //           if (INPUT_READY == config.inputState)
+ //           {
+ //               config.inputState = INPUT_COMMAND;
+ //               return;
+ //           }
+ //           Serial.print(F("\r\nTarget: (Enter to finish): "));
+ //           config.param1 = "";
+ //           config.param2 = "";
+ //           config.inputState = INPUT_KEY;
+ //           config.storedCommand = command;
+ //           break;
+
+        case 'R': while (1); break;
 
         case 's':
-            kv.save();
+            handle_send_keys(command);
             break;
 
-        case 'x':
-            line_editor(ansi, editor_buffer, EDITOR_BUFFER_LEN);
-            break;
+//        case 'x':
+//            line_editor(ansi, editor_buffer, EDITOR_BUFFER_LEN);
+//            break;
 
 #endif // KV
         default:
             Serial.println(F("a = power on"));
             Serial.println(F("A = power off"));
+            Serial.println(F("c = clear parameters"));
             Serial.println(F("d = delete kv"));
             Serial.println(F("e = enroll"));
             Serial.println(F("f = fingeprint init"));
@@ -535,9 +579,10 @@ void handle_command(byte command)
             Serial.println(F("k = list keys"));
             Serial.println(F("l = load KV"));
             Serial.println(F("p = put key/value"));
-            Serial.println(F("r = reset"));
-            Serial.println(F("s = save KV"));
-            Serial.println(F("x = line editor test"));
+//            Serial.println(F("r = regex etst"));
+            Serial.println(F("R = reset"));
+            Serial.println(F("s = send keys"));
+//            Serial.println(F("x = line editor test"));
             break;
     }
 }
@@ -579,18 +624,6 @@ void setup(void)
 //    watchdog_enable(1000, 1);
 }
 
-void keyboard_send()
-{
-    if (0 == config.sending_index)
-    {
-        Keyboard.begin();
-    }
-    if (config.sending_index < config.sending.length())
-    {
-        Keyboard.write(config.sending[config.sending_index++]);
-        at.setTimeout(keyboard_send, 20);
-    }
-}
 
 void handle_longpress()
 {
@@ -619,7 +652,7 @@ void handle_longpress()
                  kv.key(config.selection).c_str());
             config.sending = kv.value(config.selection);
             config.sending_index = 0;
-            keyboard_send();
+//            keyboard_send();
         }
     }
     at.setTimeout(power_off, 500);
