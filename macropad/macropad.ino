@@ -1,6 +1,10 @@
+#define LOG_LOCAL_LEVEL  ESP_LOG_VERBOSE
+#define USE_ESP_IDF_LOG
+#define CORE_DEBUG_LEVEL 4
+#include "esp_log.h"
 #include <stdint.h>
 #include <Wire.h>
-#include "muxmux.h"
+//#include "muxmux.h"
 //#include <oled.h>
 //#include <Preferences.h>
 //#include <Keyboard.h>
@@ -48,8 +52,10 @@
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
-#define PIN_RESET 9
+#define PIN_RESET 46
 
+const int ADDR_MUX0 = 0x70;
+const int ADDR_MUX1 = 0x71;
 //ktypedef struct
 //k{
 //k    const __FlashStringHelper * label;
@@ -67,22 +73,21 @@ typedef struct
 
 
 struct {
-//    uint8_t fontIndex;
-//    uint8_t size;
-    uint8_t param[PARAM_LEN];
-    uint8_t paramIndex;
+//    byte fontIndex;
+//    byte size;
+    byte param[PARAM_LEN];
+    byte paramIndex;
     int32_t numericParam;
     bool accumParameter;
 }config;
-int32_t numericParameter;
+//int32_t config.numericParam;
 #ifdef FINGER
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
 #endif // FINGER
-
+//MuxMux mux(Wire);
 // eSPIFFS fileSystem(&Serial);
 #ifdef OLED_DISPLAY
-MuxMux mux(0);
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &mux, OLED_RESET);
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #endif // OLED_DISPLAY
 //Keyboard kb();
 Command * command_set;
@@ -97,7 +102,7 @@ extern Command commands_i2c[];
 // 
 // #define NUM_FONTS (sizeof(fonts)/sizeof(fonts[0]))
 
-void handleCommand(uint8_t command);
+void handleCommand(byte command);
 void cmd_help();
 void redisplay();
 void cmd_reset(void);
@@ -106,6 +111,11 @@ void cmd_clear_numeric_parameter(void);
 void cmd_test_key(void);
 void cmd_upload_keydefs(void);
 void cmd_show_config(void);
+void cmd_oled_test(void);
+void cmd_oled_init(void);
+void cmd_set_port(byte);
+void cmd_read_port();
+void cmd_mux_reset();
 //void key_store_init(Preferences ks);
 // void cmd_serial2_test_string(void);
 // void cmd_receive_yaml(void);
@@ -135,13 +145,13 @@ void cmd_help()
 void redisplay()
 {
 #ifdef OLED_DISPLAY
-    mux.setPort(0);
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);        // Draw white text
-    display.setCursor(0, SCREEN_HEIGHT-1);             // Start at top-left corner
-    display.setFont(&FreeSans12pt7b);
-    display.display();
+//    mux.setPort(0);
+//     display.clearDisplay();
+//     display.setTextSize(1);
+//     display.setTextColor(SSD1306_WHITE);        // Draw white text
+//     display.setCursor(0, SCREEN_HEIGHT-1);             // Start at top-left corner
+//     display.setFont(&FreeSans12pt7b);
+//     display.display();
 #endif // OLED_DISPLAY
 }
 
@@ -165,7 +175,7 @@ void redisplay()
 //
 void cmd_show_config(void)
 {
-    Serial.printf(F("parameter %d\r\n"), numericParameter);
+    Serial.printf(F("parameter %d\r\n"), config.numericParam);
 #ifdef FINGER
     Serial.println(F("Reading sensor parameters"));
     finger.getParameters();
@@ -184,7 +194,7 @@ void cmd_show_config(void)
 //    Serial.printf(F("Text Parameter Index %u\r\n"), config.paramIndex);
 //    Serial.printf(F("Text Parameter %s\r\n"), config.param);
 //    Serial.printf(F("Numeric Parameter %d\r\n"), config.numericParam);
-//    for (uint8_t ii = 0; ii < NUM_KEYS; ii++)
+//    for (byte ii = 0; ii < NUM_KEYS; ii++)
 //    {
 //        char buffer[KEYSTORE_MACRO_MAXLEN * 4];
 //        snprintf(buffer, KEYSTORE_LABEL_MAXLEN, "disp%02xlabel", ii);
@@ -208,7 +218,7 @@ void cmd_reset(void)
 //    Serial.print("\r\n> ");
 //}
 //
-//void accumulate_parameter(uint8_t ch)
+//void accumulate_parameter(byte ch)
 //{
 //    switch (ch)
 //    {
@@ -281,7 +291,7 @@ void cmd_clear_keystore(void)
 
 void cmd_clear_numeric_parameter(void)
 {
-//    config.numericParam = 0;
+    config.numericParam = 0;
 }
 
 void cmd_test_key(void)
@@ -316,7 +326,7 @@ void cmd_test_key(void)
 void cmd_upload_keydefs(void)
 {
     char end_string[16];
-    sprintf(end_string, "%d", numericParameter);
+    sprintf(end_string, "%d", config.numericParam);
     Serial.println(F("Keydef Upload Start"));
     Serial.println(F("Keydef Upload End"));
 }
@@ -324,6 +334,12 @@ void cmd_upload_keydefs(void)
 void cmd_i2c_scan(void)
 {
     i2c_scanner();
+}
+
+void cmd_write_byte(byte byte)
+{
+    Serial.printf(F("cmd_write_byte %08x\r\n"), byte);
+    Wire.write(byte);
 }
 
 // void cmd_spiffs_test(void)
@@ -338,7 +354,7 @@ void cmd_i2c_scan(void)
 void cmd_oled_init()
 {
     Serial.println(F("cmd_oled_init"));
-    mux.setPort(0);
+    cmd_set_port(0);
 #ifdef OLED_DISPLAY
     if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
         for (;;)
@@ -349,6 +365,27 @@ void cmd_oled_init()
     }
     redisplay();
 #endif // OLED_DISPLAY
+}
+
+
+void cmd_oled_test(void) 
+{
+//    mux.setPort(0);
+//    display.clearDisplay();
+//
+//    display.setTextSize(1);      // Normal 1:1 pixel scale
+//    display.setTextColor(SSD1306_WHITE); // Draw white text
+//    display.setCursor(0, 0);     // Start at top-left corner
+//    display.cp437(true);         // Use full 256 char 'Code Page 437' font
+//
+//    // Not all the characters will fit on the display. This is normal.
+//    // Library will draw what it can and the rest will be clipped.
+////    for(int16_t i=0; i<256; i++) {
+////        if(i == '\n') display.write(' ');
+////        else          display.write(i);
+////    }
+//    display.write('M');
+//    display.display();
 }
 
 Command commands_main[] = {
@@ -367,7 +404,7 @@ Command commands_main[] = {
 //{'p',F("Input Parameter"), [](){ cmd_input_parameter(); }},
 //{'s',F("Serial2 test string"), [](){ cmd_serial2_test_string(); }},
 //{'s',F("SPIFFS Test"), [](){ cmd_spiffs_test(); }},
-//{'t',F("Test key (parameter)"), [](){ cmd_test_key(); }},
+{'t',F("OLED Test)"), [](){ cmd_oled_test(); }},
 //{'u',F("Upload key definitions"), [](){ cmd_upload_keydefs(); }},
 //{'y',F("Upload YAML File"), [](){ cmd_upload_yaml(); }},
 {' ',F("Reset"), [](){ cmd_reset(); }},
@@ -464,7 +501,7 @@ void cmd_fingerprint_init()
 
 void cmd_fingerprint_ledtest(void)
 {
-    for (uint8_t ii = 0; ii < 10; ii++)
+    for (byte ii = 0; ii < 10; ii++)
     {
         finger.LEDcontrol(true);
         delay(100);
@@ -499,7 +536,7 @@ void cmd_fingerprint_ledtest2(void)
 void cmd_fingerprint_delete(int32_t id)
 {
     Serial.printf(F("Deleting %d\r\n"), id);
-    uint8_t p = finger.deleteModel(id);
+    byte p = finger.deleteModel(id);
     fingerprint_error(p);
 }
 
@@ -560,7 +597,7 @@ void cmd_fingerprint_enroll(int32_t id)
 
 void cmd_fingerprint_get_id()
 {
-    uint8_t p = finger.getImage();
+    byte p = finger.getImage();
     fingerprint_error(p);
     // OK success!
 
@@ -581,7 +618,7 @@ void cmd_fingerprint_get_id()
 Command commands_fingerprint[] = {
 {'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter(); }},
 {'C',F("Clear Fingerprint DB"), [](){ cmd_fingerprint_clear(); }},
-{'e',F("Enroll new fingerprint to id (parameter)"), [](){ cmd_fingerprint_enroll(numericParameter); }},
+{'e',F("Enroll new fingerprint to id (parameter)"), [](){ cmd_fingerprint_enroll(config.numericParam); }},
 {'h',F("Help"), [](){ cmd_help(); }},
 {'i',F("Init"), []() { cmd_fingerprint_init(); }},
 {'l',F("LED Test"), []() { cmd_fingerprint_ledtest(); }},
@@ -595,29 +632,96 @@ Command commands_fingerprint[] = {
 void cmd_show_i2c_config()
 {
     Serial.println(F("I2C Config"));
+    Serial.printf(F("parameter %d\r\n"), config.numericParam);
+//    uint16_t ports = mux.readPorts();
+//    Serial.printf(F("Mux0 port %d Mux1 port %d\r\n"), ports >> 8, ports & 0xff);
 //    Serial.printf(F("Current Port: %d\r\n"), mux.getPort());
+}
+
+// void cmd_write_to_ch0()
+// {
+//     mux.test();
+// }
+
+void cmd_set_port(byte port)
+{
+    Serial.printf(F("setPort %d\r\n"), port);
+    if (config.numericParam > 15)
+    {
+        Wire.beginTransmission(ADDR_MUX0);
+        Wire.write(0);
+        Wire.endTransmission(true);
+        Wire.beginTransmission(ADDR_MUX1);
+        Wire.write(0);
+        Wire.endTransmission(true);
+        return;
+    }
+    Wire.beginTransmission(port > 7 ? ADDR_MUX1 : ADDR_MUX0);
+    byte value = 1 << (port >> (port > 7 ? 8: 0));
+    Serial.printf(F("Writing %02x\r\n"), value);
+    Wire.write(value);
+//    Wire.write(1 << (config.numericParam >> (config.numericParam > 7 ? 8: 0)));
+    Wire.endTransmission(true);
+}
+
+void cmd_read_port()
+{
+    Wire.beginTransmission(ADDR_MUX0);
+    byte m0 = Wire.read();
+    Wire.endTransmission();
+    Wire.beginTransmission(ADDR_MUX1);
+    byte m1 = Wire.read();
+    Serial.printf(F("Mux0 %02x Mux1 %02x\r\n"), m0, m1);
+}
+
+void cmd_mux_reset()
+{
+    digitalWrite(PIN_RESET, HIGH);
+    delay(1);
+    digitalWrite(PIN_RESET, LOW);
+    delay(1);
+    digitalWrite(PIN_RESET, HIGH);
 }
 
 Command commands_i2c[] = {
 {'?',F("Show Configuration"), [](){ cmd_show_i2c_config();}},
-//{'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter();}},
+{'b',F("beginTransmission (parameter)"), [](){ 
+    Wire.beginTransmission(config.numericParam);
+    config.numericParam = 0;
+}},
+{'c',F("Clear Numeric Parameter"), [](){ cmd_clear_numeric_parameter();}},
+{'e',F("endTransmission"), [](){ 
+    if (Wire.endTransmission(true))
+    {
+        Serial.println(F("endTransmission failed"));
+    }
+}},
 //{'C',F("Clear Keystore"), [](){ cmd_clear_keystore();}},
 //{'f',F("Font Select"), [](){ cmd_face_select();}},
 {'h',F("Help"), [](){ cmd_help();}},
 //{'i',F("I2C Scan"), [](){ cmd_i2c_scan();}},
 //{'l',F("Set Label"), [](){ cmd_set_label();}},
 //{'m',F("Set Macro"), [](){ cmd_set_macro();}},
-{'p',F("Port Select"), [](){ mux.setPort(config.numericParam); }},
-//{'s',F("Serial2 test string"), [](){ cmd_serial2_test_string(); }},
+{'p',F("Mux port select"), [](){ cmd_set_port(config.numericParam); config.numericParam = 0; }},
+{'R',F("Mux reset"), [](){ cmd_mux_reset(); }},
+{'r',F("Mux port read"), [](){ cmd_read_port(); }},
 {'s',F("Device Scan"), [](){ cmd_i2c_scan(); }},
-//{'t',F("Test key (parameter)"), [](){ cmd_test_key(); }},
+{'t',F("Test"), [](){ 
+    Wire.beginTransmission(0x10);
+    Wire.write(0x55);
+    Wire.endTransmission();
+ }},
 //{'u',F("Upload key definitions"), [](){ cmd_upload_keydefs(); }},
 //{'y',F("Upload YAML File"), [](){ cmd_upload_yaml(); }},
+{'w',F("Write a byte (param)"), [](){ 
+    cmd_write_byte(config.numericParam);
+    config.numericParam = 0;
+}},
 {'x',F("Back to main"), [](){ command_set = commands_main; }},
 {'&',F("Reset"), [](){ cmd_reset(); }}
 };
 
-void handleCommand(uint8_t command)
+void handleCommand(byte command)
 {
 //    if (config.accumParameter == true)
 //    {
@@ -634,8 +738,8 @@ void handleCommand(uint8_t command)
     }
     if (command >= '0' & command <= '9')
     {
-        numericParameter *= 10;
-        numericParameter += command - '0';
+        config.numericParam *= 10;
+        config.numericParam += command - '0';
     }
 }
 
@@ -645,7 +749,7 @@ void handleCommand(uint8_t command)
 //     ks.begin(KEYSTORE_NAME, KEYSTORE_RW);
 //     ks.putBool("init", true);
 // 
-//     for (uint8_t ii = 0; ii < NUM_KEYS; ii++)
+//     for (byte ii = 0; ii < NUM_KEYS; ii++)
 //     {
 //         char buffer[20];
 //         sprintf(buffer, "disp%02xlabel", ii);
@@ -659,12 +763,16 @@ void handleCommand(uint8_t command)
 
 void setup(void)
 {
-    pinMode(PIN_RESET, INPUT_PULLUP);
-//    digitalWrite(PIN_RESET, HIGH);
+//    esp_log_set_level_master(ESP_LOG_WARN);
+    esp_log_level_set("*", ESP_LOG_DEBUG);
+    pinMode(PIN_RESET, OUTPUT);
+    cmd_mux_reset();
     memset(&config, 0, sizeof(config));
     command_set = commands_main;
     Serial.begin(115200);
-    i2c_scanner_setup();
+    Wire.begin();
+//    mux.setPort(255);
+//    i2c_scanner_setup();
 //    Preferences key_store;
 //    key_store.begin(KEYSTORE_NAME, KEYSTORE_RW);
 //    if (false == key_store.isKey("init"))

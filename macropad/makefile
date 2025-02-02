@@ -1,6 +1,6 @@
 PROJ=macropad
 PORT=/dev/ttyACM0
-PORT2=/dev/ttyUSB0
+PORT2=/dev/ttyACM1
 #PORT=/dev/ttyUSB0
 #PLATFORM=rp2040:rp2040:generic
 #PLATFORM=esp8266:esp8266:esp8266
@@ -41,13 +41,13 @@ u:
 	${ACLI} upload  -b ${PLATFORM} -p ${PORT} -i ${ELF} 2>&1 | tee upload.log
 
 s:
-	screen ${PORT} 115200
+	screen ${PORT2} 115200
 
 d:
-	${ACLI} debug -b ${PLATFORM}
+	${ACLI} debug -b ${PLATFORM} 2>&1 | tee debug.log
 
 o:
-	${OPEN_OCD} -s ${OPEN_OCD_SCRIPTS} --file board/esp32s3-builtin.cfg
+	${OPEN_OCD} -s ${OPEN_OCD_SCRIPTS} --file board/esp32s3-builtin.cfg 
 
 g:
 	${GDB} -x .gdbinit ${ELF}
@@ -61,5 +61,7 @@ dg:
 e:
 	python3 ${HOME}/.arduino15/packages/esp32/tools/esptool_py/4.6/esptool.py --port ${PORT} --chip esp32s3 erase_flash
 
+gui:
+	gdbgui --remote --gdb-cmd "${GDB} -x gdbinit ${ELF}"
 
 # https://codeblog.dotsandbrackets.com/arduino-cli-partition-scheme/

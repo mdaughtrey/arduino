@@ -7,25 +7,16 @@
 #include <ansi.h>
 //#include "line_editor.h"
 #include "parser.h"
-#define OLED
-#ifdef OLED
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Fonts/FreeSans12pt7b.h>
-#endif // OLED
 //#include <Keyboard.h>
 #include <Mouse.h>
-#define FINGERPRINT
-#ifdef FINGERPRINT
 #include <Adafruit_Fingerprint.h>
-#endif // FINGERPRINT
 #include <AsyncTimer.h>
 
-#define KV
-#ifdef KV
 #include "keyvalue.h"
 KeyValue kv;
-#endif // KV
 
 #include <string>
 
@@ -51,9 +42,7 @@ ANSI ansi(&Serial);
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
-#ifdef OLED
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire1, OLED_RESET);
-#endif // OLED
 
 const uint8_t PIN_TOUCH = 2;
 const uint8_t PIN_FINGERPRINT_RX = 5;
@@ -64,7 +53,6 @@ const uint8_t PIN_OLED_SDA = 26;
 const uint8_t PIN_OLED_SCL = 27;
 const uint16_t JIGGLE_TIMEOUT = 5000;
 
-#define FSH(s) reinterpret_cast<const __FlashStringHelper *>(s)
 typedef struct
 {
     char key;
@@ -80,7 +68,6 @@ typedef enum
     INPUT_READY
 } InputState;
 
-//#define PARAM_LEN 32
 struct {
     InputState inputState;
     String param1;
@@ -105,19 +92,15 @@ const int EDITOR_BUFFER_LEN = 32;
 char editor_buffer[EDITOR_BUFFER_LEN] = "i am a buffer";
 
 
-#ifdef FINGERPRINT
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial1);
-#endif // FINGERPRINT
 
 void cmd_clear_numeric_parameter(void);
 void setup(void);
 
-#ifdef FINGERPRINT
 void fingerprint_error(int8_t);
 void cmd_fingerprint_init();
 void cmd_fingerprint_delete(int32_t);
 void cmd_fingerprint_enroll(uint8_t);
-#endif // FINGERPRINT
 void loop(void);
 
 // --------------------------------------------------------------------------
@@ -127,7 +110,6 @@ void oled_init();
 
 void oled_init()
 {
-#ifdef OLED
     if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) 
     {
         Serial.println(F("SSD1306 allocation failed"));
@@ -149,7 +131,6 @@ void oled_init()
         at.reset(config.oled_timeout);
     }
 //    oled_redisplay();
-#endif // OLED
 }
 
 void oled_print(String & text)
@@ -199,7 +180,6 @@ void touched()
     }
 }
 
-#ifdef FINGERPRINT
 void fingerprint_error(int8_t id)
 {
     switch(id)
@@ -353,7 +333,6 @@ int8_t cmd_fingerprint_get_id()
     Serial.print(finger.confidence);
     return finger.fingerID;
 }
-#endif // FINGERPRINT
 
 void power_on()
 {
@@ -450,21 +429,29 @@ void handle_send_keys(byte command)
     if (INPUT_READY == config.inputState)
     {
         Serial.println("handle_send_keys");
-        config.accum_numbers = false;
-        int index = config.param1.toInt();
-        if (index < kv.count())
+ //       config.accum_numbers = false;
+        if (isDigit(*config.param1.begin()))
         {
-            std::string buffer(kv.value(config.param1.toInt()).c_str());
+            int index = config.param1.toInt();
+            if (index < kv.count())
+            {
+                std::string buffer(kv.value(config.param1.toInt()).c_str());
+                Parser parser(buffer);
+            }
+        }
+        else
+        {
+            std::string buffer(config.param1.c_str());
             Parser parser(buffer);
         }
         config.inputState = INPUT_COMMAND;
         return;
     }
-    Serial.print(F("\r\n# to send: (Enter to finish): "));
+    Serial.print(F("\r\n#key  to send or text: (Enter to finish): "));
     config.param1 = "";
     config.param2 = "";
     config.inputState = INPUT_VALUE;
-    config.accum_numbers = true;
+//    config.accum_numbers = true;
     config.storedCommand = command;
 }
 
@@ -499,9 +486,7 @@ void handle_command(byte command)
     String key;
     String value;
     byte count;
-#ifdef KV
     Node * node;
-#endif // KV
 
     switch (command)
     {
@@ -511,13 +496,10 @@ void handle_command(byte command)
             config.param1 = "";
             config.param2 = "";
             break;
-#ifdef FINGERPRINT
         case 'd': handle_kv_delete(command); break;
         case 'e': cmd_fingerprint_enroll(0); break;
         case 'f': cmd_fingerprint_init(); break;
         case 'g': cmd_fingerprint_get_id(); break;
-#endif // FINGERPRINT
-#ifdef KV
         case 'k': 
             for (count = 0; count < kv.count(); count++)
             {
@@ -528,7 +510,7 @@ void handle_command(byte command)
             
             break;
 
-        case 'l': kv.load(); break;
+//        case 'l': kv.load(); break;
         case 'p': 
             if (INPUT_READY == config.inputState)
             {
@@ -563,11 +545,11 @@ void handle_command(byte command)
             handle_send_keys(command);
             break;
 
+        case 'u': Parser::usage(); break;
 //        case 'x':
 //            line_editor(ansi, editor_buffer, EDITOR_BUFFER_LEN);
 //            break;
 
-#endif // KV
         default:
             Serial.println(F("a = power on"));
             Serial.println(F("A = power off"));
@@ -577,11 +559,12 @@ void handle_command(byte command)
             Serial.println(F("f = fingeprint init"));
             Serial.println(F("g = get fingerprint id"));
             Serial.println(F("k = list keys"));
-            Serial.println(F("l = load KV"));
+//            Serial.println(F("l = load KV"));
             Serial.println(F("p = put key/value"));
 //            Serial.println(F("r = regex etst"));
             Serial.println(F("R = reset"));
             Serial.println(F("s = send keys"));
+            Serial.println(F("u = parser usage"));
 //            Serial.println(F("x = line editor test"));
             break;
     }
@@ -593,9 +576,7 @@ void setup(void)
     Serial.begin(115200);
 
     Serial.println("Setup");
-#ifdef FINGERPRINT 
     Serial1.begin(57600);
-#endif // FINGERPRINT
 //    if (watchdog_caused_reboot())
 //    {
 //        while (!Serial.available())
@@ -650,9 +631,9 @@ void handle_longpress()
         {
             Serial.printf("Good fingerprint, selection %s\r\n",
                  kv.key(config.selection).c_str());
-            config.sending = kv.value(config.selection);
-            config.sending_index = 0;
-//            keyboard_send();
+
+                std::string buffer(kv.value(config.selection).c_str());
+                Parser parser(buffer);
         }
     }
     at.setTimeout(power_off, 500);
