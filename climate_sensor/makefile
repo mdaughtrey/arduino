@@ -36,6 +36,8 @@ RBDIR=~/remotebuild/arduino/${PROJ}
 
 all:
 	make b
+	make u
+	make s
 	
 # Upload - remove and reinsert SS micro every  time
 u:

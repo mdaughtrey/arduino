@@ -1,43 +1,290 @@
-#include <SPI.h>
 #include <Wire.h>
-//#include <Arduino.h>
+#include <Arduino.h>
+#include <stdlib.h>
+#include <Wire.h>
+#include <AsyncTimer.h>
+#include <DHT22.h>
+#include <SPI.h>
 
-//#define TFT_MOSI 19
-#define TFT_MOSI 19
-#define TFT_SCLK 18
+#include <TFT_eSPI.h>
+AsyncTimer at;
+//void help();
+//extern Command commands_main[];
+#define FSH(s) reinterpret_cast<const __FlashStringHelper *>(s)
 
-#define TFT_CS   5 // Chip select for display
-#define TFT_DC   16 // Data/Command
-#define TFT_RST  23 // Reset
-#define TFT_BL   4  // Backlight
+typedef struct
+{
+    char key;
+    const __FlashStringHelper * help;
+    void (*fun)();
+}Command;
 
-#include <TFT_eSPI.h> // Make sure TFT_eSPI is installed in Arduino IDE
-#include </home/mattd/Arduino/libraries/Adafruit_GFX_Library/Fonts/FreeSansBold12pt7b.h>
+struct {
+    int32_t param;
+}config;
 
-TFT_eSPI tft = TFT_eSPI(135,240);
+void setup(void);
+void show_setup();
+void help(void);
+Command * commandset;
+DHT22 dht(SDA);
 
-void setup() {
-  Serial.begin(115200);
-  pinMode(TFT_BL, OUTPUT);
-  digitalWrite(TFT_BL, HIGH); // Turn on backlight
-  tft.init();
-  tft.setRotation(1); // Adjust rotation as needed
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE);
-  tft.setTextSize(1);
+TFT_eSPI tft = TFT_eSPI();
+
+int high_temp = -40;
+int low_temp = 257;
+int high_rh = 0;
+int low_rh = 100;
+
+const char help_paramneg1[] PROGMEM="param *= -1";
+const char help_get_measurements[] PROGMEM="Get Measurements";
+const char help_help[] PROGMEM="help";
+const char help_setup[] PROGMEM="Show setup";
+const char help_toggleb[] PROGMEM="Toggle B";
+const char help_param0[] = "Clear parameter";
+const char empty[] PROGMEM="";
+const char dashes[] PROGMEM="-------------------------------------------------------\r\n";
+
+void help()
+{
+    Serial.printf("%s\r\n", FSH(dashes));
+    for (Command * iter = commandset; iter->key != '&'; iter++)
+    {
+        Serial.printf("%c: %s\r\n", iter->key, iter->help);
+    }
+}
+   
+// void get_measurements()
+// {
+//   Serial.println(dht.debug()); //optionnal
+// 
+//   float t = dht.getTemperature();
+//   float h = dht.getHumidity();
+// 
+//   if (dht.getLastError() != dht.OK) {
+//     Serial.print("last error :");
+//     Serial.println(dht.getLastError());
+//   }
+// 
+//   Serial.print("h=");Serial.print(h,1);Serial.print("\t");
+//   Serial.print("t=");Serial.println(t,1);
+// }
+
+
+Command commands_main[] = {
+{'-',FSH(help_paramneg1), [](){ config.param *= -1;}},
+{'c',FSH(help_param0), [](){ config.param = 0;}},
+{'g',FSH(help_get_measurements), [](){ update();}},
+{'h',FSH(help_help), [](){ help();}},
+{'s',FSH(help_setup), [](){ show_setup();}},
+{'&', FSH(empty), [](){} }
+};
+
+void handleCommand(uint8_t command)
+{
+    for (Command * iter = commandset; iter->key != '&'; iter++)
+    {
+        if (iter->key == command)
+        {
+            iter->fun();
+            return;
+        }
+    }
+
+    if (command >= '0' & command <= '9')
+    {
+        config.param *= 10;
+        config.param += command - '0';
+    }
 }
 
-void loop() {
-  tft.setCursor(0, 0);
-  tft.setTextFont(1);
-  tft.println("Hello, World!");
-  tft.setCursor(0, 20);
-  tft.setTextFont(2);
-  tft.println("TTGO T-Display");
-  tft.setCursor(0, 50);
-  tft.setTextFont(4);
-  tft.println("ESP32");
-  delay(2000);
-  tft.fillScreen(TFT_BLACK);
-  delay(500);
+void show_setup()
+{
+    setup_t config;
+    tft.getSetup(config);
+
+    Serial.printf("version %s\r\n", TFT_ESPI_VERSION);
+    Serial.printf("setup_info %s\r\n", config.setup_info);
+
+    Serial.printf("setup_id %d\r\n", config.setup_id);
+    Serial.printf("esp %d\r\n", config.esp);
+    Serial.printf("trans %d\r\n", config.trans);
+    Serial.printf("serial %d\r\n", config.serial);
+    Serial.printf("overlap %d\r\n", config.overlap);
+    Serial.printf("interface %d\r\n", config.interface);
+    Serial.printf("tft_driver %d\r\n", config.tft_driver);
+    Serial.printf("tft_width %d\r\n", config.tft_width);
+    Serial.printf("tft_height %d\r\n", config.tft_height);
+    Serial.printf("r0_x_offset %d\r\n", config.r0_x_offset);
+    Serial.printf("r0_y_offset %d\r\n", config.r0_y_offset);
+    Serial.printf("r1_x_offset %d\r\n", config.r1_x_offset);
+    Serial.printf("r1_y_offset %d\r\n", config.r1_y_offset);
+    Serial.printf("r2_x_offset %d\r\n", config.r2_x_offset);
+    Serial.printf("r2_y_offset %d\r\n", config.r2_y_offset);
+    Serial.printf("r3_x_offset %d\r\n", config.r3_x_offset);
+    Serial.printf("r3_y_offset %d\r\n", config.r3_y_offset);
+    Serial.printf("pin_tft_mosi %d\r\n", config.pin_tft_mosi);
+    Serial.printf("pin_tft_miso %d\r\n", config.pin_tft_miso);
+    Serial.printf("pin_tft_clk %d\r\n", config.pin_tft_clk);
+    Serial.printf("pin_tft_cs %d\r\n", config.pin_tft_cs);
+    Serial.printf("pin_tft_dc %d\r\n", config.pin_tft_dc);
+    Serial.printf("pin_tft_rd %d\r\n", config.pin_tft_rd);
+    Serial.printf("pin_tft_wr %d\r\n", config.pin_tft_wr);
+    Serial.printf("pin_tft_rst %d\r\n", config.pin_tft_rst);
+    Serial.printf("pin_tft_d0 %d\r\n", config.pin_tft_d0);
+    Serial.printf("pin_tft_d1 %d\r\n", config.pin_tft_d1);
+    Serial.printf("pin_tft_d2 %d\r\n", config.pin_tft_d2);
+    Serial.printf("pin_tft_d3 %d\r\n", config.pin_tft_d3);
+    Serial.printf("pin_tft_d4 %d\r\n", config.pin_tft_d4);
+    Serial.printf("pin_tft_d5 %d\r\n", config.pin_tft_d5);
+    Serial.printf("pin_tft_d6 %d\r\n", config.pin_tft_d6);
+    Serial.printf("pin_tft_d7 %d\r\n", config.pin_tft_d7);
+    Serial.printf("pin_tft_led %d\r\n", config.pin_tft_led);
+    Serial.printf("pin_tft_led_on %d\r\n", config.pin_tft_led_on);
+    Serial.printf("pin_tch_cs %d\r\n", config.pin_tch_cs);
+    Serial.printf("tft_spi_freq %d\r\n", config.tft_spi_freq);
+    Serial.printf("tft_rd_freq %d\r\n", config.tft_rd_freq);
+    Serial.printf("tch_spi_freq %d\r\n", config.tch_spi_freq);
+} 
+
+void temp_color(int x){
+  if ( x >= 104 ){tft.setTextColor(TFT_WHITE, TFT_BLACK);}
+  else if ( x >= 95 ){tft.setTextColor(TFT_PINK, TFT_BLACK);}
+  else if ( x >= 85 ){tft.setTextColor(TFT_MAGENTA, TFT_BLACK);}
+  else if ( x >= 77 ){tft.setTextColor(TFT_RED, TFT_BLACK);}
+  else if ( x >= 68 ){tft.setTextColor(TFT_ORANGE, TFT_BLACK);}
+  else if ( x >= 59 ){tft.setTextColor(TFT_YELLOW, TFT_BLACK);}
+  else if ( x >= 50 ){tft.setTextColor(TFT_GREENYELLOW, TFT_BLACK);}
+  else if ( x >= 41 ){tft.setTextColor(TFT_GREEN, TFT_BLACK);}
+  else if ( x >= 23 ){tft.setTextColor(TFT_SKYBLUE, TFT_BLACK);}
+  else if ( x >= 5 ){tft.setTextColor(TFT_BLUE, TFT_BLACK);}
+  else if ( x < 5 ){tft.setTextColor(TFT_VIOLET, TFT_BLACK);} // END IF ELSE
+} // END temp_color()
+
+void rh_color(int x){
+  if ( x >= 70 ){tft.setTextColor(TFT_RED, TFT_BLACK);}
+  else if (x >= 60 ){tft.setTextColor(TFT_ORANGE, TFT_BLACK);}
+  else if (x >= 30 ){tft.setTextColor(TFT_GREEN, TFT_BLACK);}
+  else if (x < 30 ){tft.setTextColor(TFT_BLUE, TFT_BLACK);} // END IF ELSE
+} // END rh_color()
+
+void update()
+{
+  Serial.println("Getting temps.");
+  
+  int temp = dht.getTemperature(false); // range of -40 to 257 true = F
+  int rh = dht.getHumidity(); // range of 0 to 100
+  // int hif = dht.computeHeatIndex(temp, rh);
+  // Compute heat index in Fahrenheit (the default), change out temp for hif to display Heat Index.
+
+  ///////////////////////// CHECK FOR FAILED SENSOR READS /////////////////////////
+    
+  // CHECK IF ANY OF THE SENSOR READS FAILED
+  if(isnan(rh) || isnan(temp)){
+    Serial.println(F("Failed to read from DHT sensor!"));
+    temp = dht.getTemperature(true);
+    rh = dht.getHumidity();
+    return;
+  } // END NAN IF
+   
+  ///////////////////////// SET HIGHS AND LOWS /////////////////////////
+
+//  if (millis() >= refresh + (24*60*60*1000)){    // Reset High and Low after 24 hours, 86400000 milliseconds in a day
+//    high_temp = temp;    // high_temp = hif;
+//    low_temp = temp;    // low_temp = hif;
+//    high_rh = rh;
+//    low_rh = rh;
+//    refresh = millis();}
+//  else {
+    if(temp >= high_temp){high_temp = temp;}    //  if(hif >= high_temp){high_temp = hif;}
+    if(temp <= low_temp){low_temp = temp;}    //  if(hif <= low_temp){low_temp = hif;}  
+    if(rh >= high_rh){high_rh = rh;}
+    if(rh <= low_rh){low_rh = rh;}
+//  } // END IF ELSE
+ 
+  //////////////////////////////////////////////////////////////////////
+  Serial.printf("TEMP: %d, HIGH: %d, LOW:, %d\n", temp, high_temp, low_temp);
+  Serial.printf("RH: %d, HIGH: %d, LOW:, %d\n", rh, high_rh, low_rh);
+  //////////////////////////////////////////////////////////////////////
+  
+  // PRINT THE CURRENT DATA IN BIG FONTS
+  tft.setTextSize(8);
+    
+  // CLEAR THE TEXT
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  tft.drawString("   ", tft.width() / 2, 65);
+  tft.drawString("   ", tft.width() / 2, 185);
+  
+  // PRINT DATA
+  temp_color(temp);    //  temp_color(hif);
+  tft.drawNumber(temp, tft.width() / 2, 65);
+  rh_color(rh);
+  tft.drawNumber(rh, tft.width() / 2, 185);
+
+  //////////////////////////////////////////////////////////////////////
+  
+  // PRINT HIGHS AND LOWS IN SMALL FONTS
+  tft.setTextSize(2);
+  
+  // CLEAR THE TEXT
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  tft.drawString("   ", 45, 105);
+  tft.drawString("   ", tft.width() / 2 + 45, 105);
+
+  tft.drawString("   ", 40, 230);
+  tft.drawString("   ", tft.width() / 2 + 35, 230);
+  
+  // PRINT THE DATA
+  temp_color(high_temp);
+  tft.drawNumber(high_temp, 45, 105);
+  temp_color(low_temp);
+  tft.drawNumber(low_temp, tft.width() / 2 + 45, 105);
+
+  rh_color(high_rh);
+  tft.drawNumber(high_rh, 40, 230);
+  rh_color(low_rh);
+  tft.drawNumber(low_rh, tft.width() / 2 + 35, 230);
+
 }
+
+void setup(void)
+{
+    memset(&config, 0, sizeof(config));
+    Serial.begin(115200);
+    commandset = commands_main;
+    tft.init();
+///////////////////////// SET STATIC SCREEN ELEMENTS /////////////////////////
+//  pinMode(TFT_BL, OUTPUT);
+//  digitalWrite(TFT_BL, HIGH); // Turn on backlight
+  
+    tft.setRotation(0);
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    
+    //tft.drawString("Hello", tft.width() / 2, 15);
+     tft.drawString("TEMPERATURE", tft.width() / 2, 15);
+     tft.drawLine(0, 25, 250, 25, TFT_BLUE);
+     tft.drawString("H:", 15, 105);
+     tft.drawString("L:", tft.width() / 2 + 15, 105);
+     
+     tft.drawString("HUMIDITY", tft.width() / 2, tft.height() / 2 + 15);
+     tft.drawLine(0, 145, 250, 145, TFT_BLUE);
+     tft.drawString("H:", 15, 230);
+    tft.drawString("L:", tft.width() / 2 + 10, 230);
+    update();
+    at.setInterval(update, 60000);
+    
+}
+
+void loop(void)
+{
+    at.handle();
+    if (Serial.available())
+    {
+        handleCommand(Serial.read());
+    }
+}
+
+
