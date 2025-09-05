@@ -184,12 +184,14 @@ void loop(void)
     else if (extend && !get_bit(EXTEND) && !get_bit(RETRACT) && !get_bit(EXTENDED))
     {
         set_bit(EXTEND, 1);
-        config.timer_id = at.setTimeout([](){ config.system_state = 0; }, 10000);
+        at.cancel(config.timer_id);
+        config.timer_id = at.setTimeout([](){ config.system_state = 0; }, 30000);
     }
     else if (retract && !get_bit(RETRACT) && !get_bit(EXTEND) && !get_bit(RETRACTED))
     {
         set_bit(RETRACT, 1);
-        config.timer_id = at.setTimeout([](){ config.system_state = 0; }, 10000);
+        at.cancel(config.timer_id);
+        config.timer_id = at.setTimeout([](){ config.system_state = 0; }, 30000);
     }
     if (get_bit(RETRACTED))
     {
